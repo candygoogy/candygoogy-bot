@@ -1,0 +1,21 @@
+# Weekly update pull requests for the pinned GitHub Actions (commit SHAs, with
+# their version comments) and the Dockerfile's digest-pinned base image.
+# No "pip" entry: requirements*.txt are hash-locked with uv and updated by hand
+# (see CONTRIBUTING.md); pip-audit (audit.yml) flags known vulnerabilities weekly.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      base-image:
+        update-types: [minor, patch]

@@ -1,0 +1,5 @@
+# Runtime dependencies. After editing, regenerate requirements.txt (see README).
+python-telegram-bot==22.8
+python-dotenv
+# /homelab asks Docker Engine's API for the containers (candygoogy/dockerapi.py).
+httpx

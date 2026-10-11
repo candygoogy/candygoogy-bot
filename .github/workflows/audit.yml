@@ -1,0 +1,43 @@
+name: Dependency audit
+
+# Checks the locked dependencies against known vulnerabilities (PyPI/OSV).
+# Also runs weekly: a new advisory can affect a lock that hasn't changed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pip-audit:
+    name: pip-audit (locked requirements)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      # pip-audit itself comes from the hash-checked dev lock.
+      - name: Install locked dev dependencies (hash-checked)
+        run: |
+          python -m venv venv
+          venv/bin/pip install --require-hashes -r requirements-dev.txt
+
+      # Both locks are fully pinned and hashed, so pip-audit can read them
+      # directly instead of resolving them in a throwaway environment.
+      - name: Audit runtime and dev locks
+        run: venv/bin/pip-audit --require-hashes --disable-pip -r requirements.txt -r requirements-dev.txt

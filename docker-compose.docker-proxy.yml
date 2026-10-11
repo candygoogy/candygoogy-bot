@@ -1,0 +1,53 @@
+# Optional: lets /homelab list Docker containers through a filtering proxy, so
+# the bot never sees Docker's socket (which is root on the host). The proxy
+# allows one request only: GET /containers/json (optionally /v1.NN/...), the
+# container list. Everything else gets 403 or 405.
+#
+#   echo "DOCKER_GID=$(getent group docker | cut -d: -f3)" >> .env
+#   docker compose -f docker-compose.yml -f docker-compose.docker-proxy.yml up -d
+services:
+  bot:
+    environment:
+      DOCKER_HOST: unix:///run/docker-proxy/docker.sock
+    volumes:
+      - docker-proxy:/run/docker-proxy:ro
+    depends_on:
+      - docker-proxy
+
+  docker-proxy:
+    # https://github.com/wollomatic/socket-proxy, pinned by its multi-arch index
+    # digest. To refresh: docker buildx imagetools inspect wollomatic/socket-proxy:<version>
+    image: wollomatic/socket-proxy:1.13.1@sha256:3935b709275e4ec35d6ed5a5c4a1f0d01ed31eec5e7234efc3357ecd47689002
+    # The bot's UID, so the filtered socket (mode 0600) is the bot's; the
+    # docker group lets the proxy read the real socket.
+    user: "10001:${DOCKER_GID:?set DOCKER_GID in .env (getent group docker)}"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    command:
+      - "-socketpath=/var/run/docker.sock"
+      - "-proxysocketendpoint=/run/docker-proxy/docker.sock"
+      - "-proxysocketendpointfilemode=0600"
+      # Matched against the path only (not ?all=1); ^ and $ are implied.
+      - "-allowGET=(/v1\\.[0-9]+)?/containers/json"
+      - "-loglevel=WARN"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - docker-proxy:/run/docker-proxy
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "2"
+
+volumes:
+  # A small tmpfs owned by the bot's UID, shared by the two containers.
+  docker-proxy:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "uid=10001,gid=10001,mode=0700,size=1m"

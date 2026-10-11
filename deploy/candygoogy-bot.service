@@ -1,0 +1,103 @@
+# /etc/systemd/system/candygoogy-bot.service
+#
+# The bot as a systemd service, without Docker (for Docker, see docker-compose.yml).
+#
+# Layout (change the paths below together if yours differ):
+#   /opt/candygoogy-bot              the repo, owned by the service user, venv in venv/
+#   /etc/candygoogy/bot.env          the configuration (root:candygoogy, mode 640)
+#   /etc/candygoogy/ssh/id_ed25519   the SSH key (root:candygoogy, mode 640; dir 750)
+#   /var/lib/candygoogy-bot          state: timers, alerts, ssh's known_hosts (systemd makes it)
+#
+# One-time setup, as an admin:
+#   sudo useradd --system --user-group --home-dir /var/lib/candygoogy-bot \
+#       --no-create-home --shell /usr/sbin/nologin candygoogy
+#   sudo install -d -o candygoogy -g candygoogy -m 755 /opt/candygoogy-bot
+#   sudo -u candygoogy git clone <repo URL> /opt/candygoogy-bot
+#   sudo -u candygoogy python3 -m venv /opt/candygoogy-bot/venv
+#   sudo -u candygoogy /opt/candygoogy-bot/venv/bin/pip install --no-cache-dir \
+#       --require-hashes -r /opt/candygoogy-bot/requirements.txt
+#   sudo install -d -o root -g candygoogy -m 750 /etc/candygoogy /etc/candygoogy/ssh
+#   sudo install -o root -g candygoogy -m 640 /opt/candygoogy-bot/.env.example /etc/candygoogy/bot.env
+#   sudo install -o root -g candygoogy -m 640 <your key> /etc/candygoogy/ssh/id_ed25519
+#   (edit /etc/candygoogy/bot.env, then:)
+#   sudo cp /opt/candygoogy-bot/deploy/candygoogy-bot.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now candygoogy-bot
+# Updates: /opt/candygoogy-bot/deploy/deploy.sh
+# Audit:   systemd-analyze security candygoogy-bot
+
+[Unit]
+Description=candygoogy Telegram bot (Wake-on-LAN and power control)
+Wants=network-online.target
+After=network-online.target
+# Stop crash-looping after 5 tries in 5 minutes.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=candygoogy
+Group=candygoogy
+WorkingDirectory=/opt/candygoogy-bot
+# Defaults for this layout; the same names in bot.env win over them.
+Environment=SSH_KEY_PATH=/etc/candygoogy/ssh/id_ed25519
+# ssh records each machine's host key here (accept-new), so it needs no
+# writable ~/.ssh. %S is /var/lib, the parent of StateDirectory= below.
+Environment=SSH_KNOWN_HOSTS=%S/candygoogy-bot/known_hosts
+EnvironmentFile=/etc/candygoogy/bot.env
+ExecStart=/opt/candygoogy-bot/venv/bin/python bot.py
+Restart=on-failure
+RestartSec=10
+# Exit 2 is a configuration problem (bot.py prints which variables): restarting
+# can't fix it, so don't. Fix bot.env, then `sudo systemctl restart candygoogy-bot`.
+RestartPreventExitStatus=2
+
+# Timers, alerts and the last power action survive restarts here: systemd
+# creates /var/lib/candygoogy-bot owned by the service user, keeps it writable
+# despite ProtectSystem=strict, and passes its path in $STATE_DIRECTORY.
+StateDirectory=candygoogy-bot
+StateDirectoryMode=0700
+
+# --- Hardening -------------------------------------------------------------
+# The bot only needs: outbound network, read access to its code, bot.env and
+# SSH key, and write access to its state directory above.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# No capabilities at all. ping then works only through unprivileged ICMP
+# sockets, so `sysctl net.ipv4.ping_group_range` must include the service's
+# group; systemd's default is "0 2147483647" (all groups). If it prints
+# "1 0", ping always fails and /status reports every machine as off. Fix with:
+#   echo 'net.ipv4.ping_group_range = 0 2147483647' | sudo tee /etc/sysctl.d/60-ping.conf
+#   sudo sysctl --system
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Docker containers in /homelab: the bot asks Docker's API on its socket
+# (DOCKER_HOST, default unix:///var/run/docker.sock). Nothing here grants that.
+# Membership of the docker group would, but that group is root-equivalent: it
+# can start a privileged container. Prefer a filtering proxy that only allows
+# listing containers (see docker-compose.docker-proxy.yml) and point
+# DOCKER_HOST at its socket. Without either, /homelab says Docker isn't reachable.
+# IPv4/IPv6 for Telegram, ping, SSH and the internet check; UNIX for DNS via
+# systemd-resolved and Docker's (or the proxy's) socket; NETLINK for
+# `ip neigh` (ARP lookup in /status).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

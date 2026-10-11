@@ -1,0 +1,34 @@
+// For a Linux machine the bot controls (os = "linux"), NOT the bot's own host.
+// /etc/polkit-1/rules.d/50-candygoogy-power.rules
+//
+// Lets the user the bot logs in as over SSH power off, reboot and suspend this
+// machine, which the bot does with `systemctl poweroff|reboot|suspend
+// --no-ask-password`. Nothing else, and nothing runs as root: systemd-logind
+// asks polkit. Inhibitor locks (e.g. a running package upgrade) still block it.
+//
+// 1. Replace "botuser" below with the machine's ssh_user (SSH_USER).
+//    Remove the three *-multiple-sessions lines to refuse while someone else
+//    is logged in.
+// 2. Install, as an admin on this machine (install, not mv, keeps SELinux
+//    labels right; polkit picks it up at once):
+//      sudo install -m 644 linux-power.rules /etc/polkit-1/rules.d/50-candygoogy-power.rules
+//    Headless servers often have no polkit daemon, and logind then refuses
+//    everything: `systemctl status polkit`; on Debian/Ubuntu `sudo apt install polkitd`.
+//    polkit 0.105 (Debian 11, Ubuntu 23.04 and older) ignores .rules files;
+//    see docs/linux-target.md for its .pkla equivalent.
+// 3. Check, as botuser in an SSH session (asks polkit only, changes nothing):
+//      pkcheck --action-id org.freedesktop.login1.power-off --process $$ && echo allowed
+//
+// Remove: sudo rm /etc/polkit-1/rules.d/50-candygoogy-power.rules
+
+polkit.addRule(function (action, subject) {
+    if (subject.user == "botuser" &&
+        (action.id == "org.freedesktop.login1.power-off" ||
+         action.id == "org.freedesktop.login1.power-off-multiple-sessions" ||
+         action.id == "org.freedesktop.login1.reboot" ||
+         action.id == "org.freedesktop.login1.reboot-multiple-sessions" ||
+         action.id == "org.freedesktop.login1.suspend" ||
+         action.id == "org.freedesktop.login1.suspend-multiple-sessions")) {
+        return polkit.Result.YES;
+    }
+});

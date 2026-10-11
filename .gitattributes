@@ -1,0 +1,11 @@
+# Default: normalize text files to LF in the repo and on checkout.
+* text=auto eol=lf
+
+# Run on Linux, so always LF, never auto-detected: a CR on a
+# shebang line fails with "bad interpreter", and systemd rejects CRs in units.
+*.sh text eol=lf
+*.service text eol=lf
+
+# Images are binary: never converted.
+*.gif binary
+*.png binary

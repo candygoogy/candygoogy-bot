@@ -1,0 +1,13 @@
+# Everything is excluded, then only what the image needs is let back in, so
+# .env, SSH keys (*.key, ssh/), venv/, .git/, tests/, caches and state files
+# can never enter the build context.
+*
+!bot.py
+!requirements.txt
+!LICENSE
+!candygoogy/
+# Not even inside the package.
+**/__pycache__
+**/*.py[cod]
+**/.env
+**/*.key

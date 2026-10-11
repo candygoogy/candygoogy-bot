@@ -1,0 +1,22 @@
+.env
+venv/
+.venv/
+__pycache__/
+*.key
+.ruff_cache/
+.pytest_cache/
+timers.json
+timers.tmp
+last_action.json
+last_action.tmp
+homelab_alerts.json
+homelab_alerts.tmp
+internet.json
+internet.tmp
+keyboard.json
+keyboard.tmp
+homelab_reboot.json
+homelab_reboot.tmp
+# Docker Compose: the SSH key directory and the machines file it mounts.
+/ssh/
+/machines.toml

@@ -1,0 +1,43 @@
+# The machines the bot controls, for MACHINES_FILE (instead of WORKSTATION_*).
+# Copy it, e.g. to /etc/candygoogy/machines.toml (systemd) or machines.toml
+# next to docker-compose.yml (Docker), and replace the example values.
+#
+# One [machines.<name>] table per machine, 1 to 10, shown in this order. The
+# name is what you type (/wake desk) and what the buttons show: 1-16 of a-z,
+# 0-9 and "-", not starting or ending with "-", and not "all".
+#
+# Keys:
+#   os             "windows", "linux" or "macos" (Linux and macOS: experimental;
+#                  see docs/windows-target.md, docs/linux-target.md, docs/macos-target.md)
+#   mac            the network card's MAC, for Wake-on-LAN
+#   ip             its fixed IP address (use a DHCP reservation)
+#   ssh_user       the user the bot logs in as over SSH
+#   ssh_key_path   optional: the bot's private key for this machine.
+#                  Default: SSH_KEY_PATH, then ~/.ssh/id_ed25519. With Docker,
+#                  a path in /etc/candygoogy/ssh/ (the mounted ssh folder).
+#   ssh_port       optional: sshd's port, a number without quotes. Default: 22
+#   wol_broadcast  optional: where the magic packet goes, e.g. the LAN's
+#                  broadcast address when the bot's host has several networks.
+#                  Default: 255.255.255.255
+# Each machine needs its own mac and ip.
+
+[machines.desk]
+os = "windows"
+mac = "00:00:5e:00:53:01"
+ip = "192.0.2.10"
+ssh_user = "botuser"
+
+[machines.nas]
+os = "linux"
+mac = "00:00:5e:00:53:02"
+ip = "192.0.2.20"
+ssh_user = "botuser"
+ssh_key_path = "/etc/candygoogy/ssh/nas_ed25519"
+ssh_port = 2222
+
+[machines.mini]
+os = "macos"  # wakes from sleep only, not from a full shutdown
+mac = "00:00:5e:00:53:03"
+ip = "192.0.2.30"
+ssh_user = "botuser"
+wol_broadcast = "192.0.2.255"

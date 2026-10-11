@@ -1,0 +1,9 @@
+# Development tools. After editing, regenerate requirements-dev.txt (see README).
+# Constrained to the runtime lock so dev and production share versions.
+-c requirements.txt
+-r requirements.in
+pytest
+ruff
+basedpyright
+uv
+pip-audit

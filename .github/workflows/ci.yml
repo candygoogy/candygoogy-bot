@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Read-only token: CI only needs to check out the code.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, types and tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 is the oldest supported version; 3.13 is a current one.
+        python: ["3.11", "3.13"]
+    steps:
+      # Actions are pinned to commit SHAs so a moved tag can't change what runs.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Scripts may be written on Windows but run on Linux, where a missing
+      # executable bit means "Permission denied".
+      - name: Shell scripts are executable (git mode 100755)
+        run: |
+          bad=$(git ls-files -s -- '*.sh' | awk '$1 != "100755" {print $4}')
+          if [ -n "$bad" ]; then
+            echo "::error::Not committed as 100755 (fix: git update-index --chmod=+x <file>):"
+            echo "$bad"
+            exit 1
+          fi
+          echo "OK: every tracked .sh file is 100755"
+
+      # A CR on a shebang line fails with "bad interpreter"; systemd rejects
+      # CRs in units. Counts CR bytes in the committed blobs (not the checkout)
+      # rather than grepping for $'\r', which Git for Windows treats as an
+      # empty pattern, so the check behaves the same when run locally.
+      - name: No CR line endings in shell scripts and systemd units
+        run: |
+          bad=""
+          while IFS= read -r -d '' f; do
+            if [ "$(git cat-file -p ":$f" | tr -cd '\r' | wc -c)" -ne 0 ]; then bad+="$f"$'\n'; fi
+          done < <(git ls-files -z -- '*.sh' '*.service')
+          if [ -n "$bad" ]; then
+            echo "::error::CR (Windows) line endings found (fix: git add --renormalize .):"
+            printf '%s' "$bad"
+            exit 1
+          fi
+          echo "OK: all tracked .sh and .service files use LF"
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      # A venv named "venv" matches pyproject.toml's basedpyright settings.
+      - name: Install locked dependencies (hash-checked)
+        run: |
+          python -m venv venv
+          venv/bin/pip install --require-hashes -r requirements-dev.txt
+
+      - name: Ruff lint
+        run: venv/bin/ruff check .
+
+      - name: Ruff format
+        run: venv/bin/ruff format --check .
+
+      - name: basedpyright
+        run: venv/bin/basedpyright
+
+      - name: pytest
+        run: venv/bin/pytest -q
+
+      # shellcheck is preinstalled on GitHub's Ubuntu runners.
+      - name: shellcheck deploy scripts
+        run: shellcheck deploy/*.sh

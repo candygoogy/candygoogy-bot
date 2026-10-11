@@ -1,0 +1,24 @@
+# For a Mac the bot controls (os = "macos"): /etc/sudoers.d/candygoogy
+#
+# Lets the user the bot logs in as over SSH run exactly these three commands as
+# root, without a password: the bot's shutdown, reboot and sleep. Arguments
+# are part of each rule, so nothing else is allowed (not even other shutdown
+# options). The bot runs them with `sudo -n`, which fails at once instead of
+# asking for a password.
+#
+# 1. Replace "botuser" below with the machine's ssh_user (SSH_USER).
+# 2. Install, as an admin on the Mac. visudo checks the syntax before saving;
+#    a broken sudoers file can lock you out of sudo:
+#      sudo visudo -f /etc/sudoers.d/candygoogy
+#    (paste the rule line below, save), then:
+#      sudo chmod 440 /etc/sudoers.d/candygoogy
+#    macOS's /etc/sudoers includes that folder; check that this prints the
+#    #includedir line:
+#      sudo grep -n includedir /etc/sudoers
+# 3. Check, as botuser in an SSH session (lists the rules, runs nothing):
+#      sudo -n -l
+#    It must list the three commands and must not ask for a password.
+#
+# Remove: sudo rm /etc/sudoers.d/candygoogy
+
+botuser ALL=(root) NOPASSWD: /sbin/shutdown -h now, /sbin/shutdown -r now, /usr/bin/pmset sleepnow

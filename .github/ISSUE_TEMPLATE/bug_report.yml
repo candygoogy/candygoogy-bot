@@ -1,0 +1,72 @@
+name: Bug report
+description: Something doesn't work as the README says it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! **Please remove your bot token, Telegram IDs, IP
+        addresses and MAC addresses from everything you paste here.** For a
+        security problem, don't use this form: see SECURITY.md.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What the bot said or did, word for word if you can.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Send /status
+        2. Tap Refresh
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How does the bot run?
+      options:
+        - Docker (docker compose)
+        - systemd (deploy/candygoogy-bot.service)
+        - Locally (python bot.py)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The commit `/about` shows, or `git rev-parse --short HEAD`.
+      placeholder: e.g. 0123abc
+    validations:
+      required: true
+  - type: dropdown
+    id: target-os
+    attributes:
+      label: The machine's operating system
+      multiple: true
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - Not about a machine (e.g. /homelab, /net)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >-
+        From `/logs` → 📄 File, `docker compose logs bot` or
+        `journalctl -u candygoogy-bot`.
+        **Remove your bot token, Telegram IDs, IPs and MACs first.**
+      render: text

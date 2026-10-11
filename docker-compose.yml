@@ -1,0 +1,72 @@
+# candygoogy-bot with Docker Compose, on a Linux host with rootful Docker Engine
+# (Docker Desktop and rootless Docker can't reach the LAN the way the bot needs).
+#
+#   Setup: cp .env.example .env    (fill it in; TZ=Area/City sets the time zone)
+#          sudo install -d -o root -g 10001 -m 750 ssh
+#          sudo install -o root -g 10001 -m 640 <your key> ssh/id_ed25519
+#          (the container runs as UID/GID 10001: group 10001 lets it read the
+#          key, and root's ownership stops it from changing or deleting it)
+#   Start: CANDYGOOGY_COMMIT="$(git rev-parse HEAD)" docker compose up -d --build
+#   Check: docker compose run --rm --no-deps bot python bot.py --check-config
+#   Logs:  docker compose logs -f bot
+#
+# Docker containers in /homelab: add docker-compose.docker-proxy.yml (see there).
+# Never mount /var/run/docker.sock into this service: it is root on the host.
+name: candygoogy
+
+services:
+  bot:
+    build:
+      context: .
+      args:
+        CANDYGOOGY_COMMIT: ${CANDYGOOGY_COMMIT:-}
+    image: candygoogy-bot:local
+    # The host's network: the Wake-on-LAN broadcast must reach the LAN and
+    # `ip neigh` must read the host's ARP table. No ports are opened.
+    network_mode: host
+    env_file: .env
+    environment:
+      # Paths inside the container. These win over the same names in .env.
+      SSH_KEY_PATH: /etc/candygoogy/ssh/id_ed25519
+      # With several machines, also mount the file below; its ssh_key_path
+      # entries must be paths in /etc/candygoogy/ssh/ too.
+      # MACHINES_FILE: /etc/candygoogy/machines.toml
+      # With the host's / mounted below (accurate disks, mount checks and
+      # "reboot required"):
+      # HOMELAB_HOST_ROOT: /host
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777,nosuid,nodev,noexec
+    volumes:
+      # Timers, the last power action, alerts and ssh's known_hosts.
+      - state:/var/lib/candygoogy-bot
+      - ./ssh:/etc/candygoogy/ssh:ro
+      # Optional: several machines (MACHINES_FILE above).
+      # - ./machines.toml:/etc/candygoogy/machines.toml:ro
+      # Optional: backup monitoring; set BACKUP_DIR to the same path in .env.
+      # - /srv/backups:/srv/backups:ro
+      # Optional: the host's / for /homelab (HOMELAB_HOST_ROOT above).
+      # Read-only, but the bot can then read whatever on the host is
+      # world-readable; never combine it with access to Docker's socket.
+      # - type: bind
+      #   source: /
+      #   target: /host
+      #   read_only: true
+      #   bind:
+      #     propagation: rslave
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 256m
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  state:

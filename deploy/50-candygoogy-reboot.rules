@@ -1,0 +1,26 @@
+// /etc/polkit-1/rules.d/50-candygoogy-reboot.rules
+//
+// Lets the bot's service user ask systemd-logind to reboot the homelab (the
+// machine the bot runs on), for the "Reboot homelab" button in /homelab and the
+// "Reboot required" alert. Nothing else: no shutdown, and an inhibitor lock
+// still blocks the reboot. Not needed in Docker, where the button is hidden.
+//
+// Install:  sudo install -m 644 deploy/50-candygoogy-reboot.rules /etc/polkit-1/rules.d/
+//           (polkit picks it up at once; no restart needed)
+// Check:    sudo -u candygoogy sh -c \
+//               'pkcheck --action-id org.freedesktop.login1.reboot --process $$' && echo allowed
+//           (asks polkit about that shell, as the service user; reboots nothing)
+// Remove:   sudo rm /etc/polkit-1/rules.d/50-candygoogy-reboot.rules
+//
+// "candygoogy" is User= in deploy/candygoogy-bot.service. If your service runs
+// as another user, change the name below to match. The rule applies to that
+// user everywhere, not only to the service, so keep it a dedicated user that
+// nobody logs in as.
+
+polkit.addRule(function (action, subject) {
+    if (subject.user == "candygoogy" &&
+        (action.id == "org.freedesktop.login1.reboot" ||
+         action.id == "org.freedesktop.login1.reboot-multiple-sessions")) {
+        return polkit.Result.YES;
+    }
+});

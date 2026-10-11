@@ -1,0 +1,15 @@
+[tool.ruff]
+# Supports Python 3.11+; keep the code compatible.
+target-version = "py311"
+line-length = 100
+
+[tool.basedpyright]
+pythonVersion = "3.11"
+venvPath = "."
+venv = "venv"
+include = ["bot.py", "candygoogy", "tests"]
+# PTB's generic Application/handler types need Any to be spelled out.
+reportExplicitAny = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
