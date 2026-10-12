@@ -370,6 +370,16 @@ def test_plus_30m_from_the_warning_sets_a_one_shot_timer() -> None:
     assert after is not None and after.skip == MON  # tonight's 23:00 won't run too
 
 
+@pytest.mark.parametrize("op", ["skipone", "later"])
+def test_warning_buttons_only_work_for_a_shutdown(op: str) -> None:
+    _ = set_one("weekdays 7:30", "wake")
+    s = only_schedule()
+    pressed = press(f"rep:{op}:{s.id}:20260707")  # forged: a wake has no warning
+    assert edits(pressed) == []
+    assert timers.pending_timers() == []  # +30m never makes a shutdown out of a wake
+    assert schedules.get_schedule(s.id) == s  # and nothing is skipped
+
+
 def test_a_warning_button_after_the_run_does_nothing(frozen: list[float]) -> None:
     _ = set_one()
     s = only_schedule()

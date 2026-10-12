@@ -291,6 +291,9 @@ async def on_repeat_button(
         if in_list:
             await edit(query, *timers_message())
         return
+    if not in_list and s.action != "shutdown":  # only a shutdown has a warning (forged data)
+        _ = await query.answer()
+        return
     if op in ("skip", "skipone", "later") and is_next_run(s, field) is None:
         _ = await query.answer(ALREADY_HAPPENED)
         if in_list:
