@@ -95,7 +95,7 @@ PCs. Docker Desktop and rootless Docker can't send Wake-on-LAN packets to the LA
 5. In Telegram, open a private chat with your bot and send `/start`.
 
 The image is `ghcr.io/candygoogy/candygoogy-bot`, for amd64 and arm64 (e.g. a
-Raspberry Pi with a 64-bit OS), published for every release from v1.0.0 on.
+Raspberry Pi with a 64-bit OS), published for every release from v1.1.0 on.
 `docker-compose.yml` follows the latest 1.x release; to pin one, set
 `CANDYGOOGY_TAG` in `.env` (see `.env.example`). Every image has a signed build
 provenance attestation, so you can check it was built by this repository's

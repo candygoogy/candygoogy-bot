@@ -6,9 +6,27 @@ All notable changes to candygoogy-bot are listed here. The format follows
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-10-12
+## [1.1.0] - 2026-10-12
 
-The first versioned release.
+### Added
+
+- Published images, `ghcr.io/candygoogy/candygoogy-bot`, for amd64 and arm64,
+  with a signed build provenance attestation. `docker-compose.yml` now pulls
+  the image; `docker-compose.build.yml` builds it from the checkout instead.
+- The host's CPU temperature in `/homelab`, from its thermal zones or CPU
+  sensor, with an optional alert (`HOMELAB_TEMP_ALERT_C`).
+- `/about` shows the release as well as the commit it's running.
+- Python 3.14 support; the image now runs on Python 3.14.
+
+### Fixed
+
+- The "when?" prompt of `/schedule_shutdown` and `/schedule_wake` is per user:
+  with two allowed users, one user's typed time no longer answers the other's
+  prompt, and one user's taps no longer close it.
+
+## [1.0.0] - 2026-10-11
+
+The first public release.
 
 ### Added
 
@@ -20,22 +38,12 @@ The first versioned release.
 - Homelab health in `/homelab`: disks, failed services, Docker containers,
   updates, pending reboots and backups, with alerts when something goes wrong
   and when it clears.
-- The host's CPU temperature in `/homelab`, from its thermal zones or CPU
-  sensor, with an optional alert (`HOMELAB_TEMP_ALERT_C`).
 - Internet outages: noticed, timed and reported when the connection is back.
 - A daily summary and a weekly report, sent at times you choose.
 - Logs in the chat: recent lines, or everything as a file.
-- `/about` shows the release and the commit it's running.
 - Only allowlisted users, in a private chat, can use the bot.
 - Runs as a locked-down Docker container or a hardened systemd service.
-- Published images, `ghcr.io/candygoogy/candygoogy-bot`, for amd64 and arm64,
-  with a signed build provenance attestation.
 
-### Fixed
-
-- The "when?" prompt of `/schedule_shutdown` and `/schedule_wake` is per user:
-  with two allowed users, one user's typed time no longer answers the other's
-  prompt, and one user's taps no longer close it.
-
-[Unreleased]: https://github.com/candygoogy/candygoogy-bot/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/candygoogy/candygoogy-bot/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/candygoogy/candygoogy-bot/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/candygoogy/candygoogy-bot/releases/tag/v1.0.0

@@ -226,7 +226,7 @@ def test_compose_runs_the_published_image() -> None:
     text = uncommented(COMPOSE)
     assert found(r"^    image: (\S+)$", text) == [f"{PUBLISHED}:${{CANDYGOOGY_TAG:-1}}"]
     assert "build:" not in text
-    assert "CANDYGOOGY_TAG=1.0.0@sha256:" in read(COMPOSE)  # how to pin a digest
+    assert "CANDYGOOGY_TAG=1.1.0@sha256:" in read(COMPOSE)  # how to pin a digest
 
 
 def test_build_overlay_never_takes_the_published_name() -> None:

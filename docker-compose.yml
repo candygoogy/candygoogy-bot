@@ -12,8 +12,8 @@
 #
 # The image is the published one, for amd64 and arm64. By default it follows
 # the latest 1.x release ("docker compose pull" updates it). To pin it, set
-# CANDYGOOGY_TAG in .env: an exact version (CANDYGOOGY_TAG=1.0.0), or a version
-# and its digest (CANDYGOOGY_TAG=1.0.0@sha256:<digest>), which can never change.
+# CANDYGOOGY_TAG in .env: an exact version (CANDYGOOGY_TAG=1.1.0), or a version
+# and its digest (CANDYGOOGY_TAG=1.1.0@sha256:<digest>), which can never change.
 # To build the image from this checkout instead, add docker-compose.build.yml.
 #
 # Docker containers in /homelab: add docker-compose.docker-proxy.yml (see there).

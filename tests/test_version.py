@@ -35,6 +35,19 @@ def test_changelog_top_release_is_this_version() -> None:
     assert headings[0][0] == __version__
 
 
+def test_changelog_releases_are_newest_first() -> None:
+    """Every "## [x]" heading below Unreleased is a release; versions go down and
+    dates never go up, so the top one really is the newest."""
+    text = changelog()
+    names: list[str] = re.findall(r"^## \[([^\]]+)\]", text, re.MULTILINE)
+    headings: list[tuple[str, str]] = re.findall(RELEASE_HEADING, text, re.MULTILINE)
+    assert [v for v, _ in headings] == names[1:]  # each one a well-formed release heading
+    versions = [tuple(int(p) for p in v.split("-")[0].split(".")) for v, _ in headings]
+    assert versions == sorted(set(versions), reverse=True)
+    dates = [d for _, d in headings if d != "UNRELEASED"]
+    assert dates == sorted(dates, reverse=True)
+
+
 def test_changelog_keeps_an_unreleased_section_on_top() -> None:
     first = re.search(r"^## .*$", changelog(), re.MULTILINE)
     assert first is not None and first.group() == "## [Unreleased]"
