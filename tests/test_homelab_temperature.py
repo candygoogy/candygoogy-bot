@@ -96,6 +96,40 @@ def test_other_hwmon_drivers_are_never_read(lab: FakeHomelab, name: str) -> None
     assert homelab.read_temperature() is None
 
 
+def test_wifi_zones_are_not_the_cpu(lab: FakeHomelab) -> None:
+    _ = lab.zone("iwlwifi_1", "70000")  # hotter, but the Wi-Fi card
+    _ = lab.zone("x86_pkg_temp", "50000")
+    assert homelab.read_temperature() == ("x86_pkg_temp", 50.0)
+
+
+def test_only_a_wifi_zone_means_no_temperature(lab: FakeHomelab) -> None:
+    _ = lab.zone("iwlwifi_1", "70000")
+    _ = lab.hwmon("nvme", "44000")  # not a CPU driver either
+    assert homelab.read_temperature() is None
+
+
+def test_a_wifi_zone_alone_leads_to_the_hwmon_fallback(lab: FakeHomelab) -> None:
+    _ = lab.zone("iwlwifi_1", "70000")
+    _ = lab.hwmon("k10temp", "58250")
+    assert homelab.read_temperature() == ("k10temp", 58.25)
+
+
+def test_the_homelabs_own_sysfs_layout(lab: FakeHomelab) -> None:
+    """As read on the real homelab (AMD, k10temp), host and container alike:
+    no thermal zones, only cooling devices, and hwmon devices of which one is the CPU."""
+    for n in range(4):
+        device = lab.sys / "class" / "thermal" / f"cooling_device{n}"
+        device.mkdir()
+        _ = (device / "type").write_text("Processor\n")
+    _ = lab.hwmon("BAT0")
+    _ = lab.hwmon("nvme", "44850")
+    _ = lab.hwmon("k10temp", "60875")
+    _ = lab.hwmon("ADP0")
+    _ = lab.hwmon("amdgpu", "60000")
+    assert homelab.read_temperature() == ("k10temp", 60.875)
+    assert " cores) · 61 °C\n" in homelab_card()
+
+
 def test_long_labels_are_cut(lab: FakeHomelab) -> None:
     _ = lab.zone("x" * 100, "50000")
     reading = homelab.read_temperature()

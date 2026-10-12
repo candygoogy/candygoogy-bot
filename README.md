@@ -114,7 +114,8 @@ gh attestation verify oci://ghcr.io/candygoogy/candygoogy-bot:1 --owner candygoo
 ```sh
 export CANDYGOOGY_COMMIT="$(git rev-parse HEAD)"   # shown by /about
 docker compose -f docker-compose.yml -f docker-compose.build.yml build
-docker compose -f docker-compose.yml -f docker-compose.build.yml run --rm --no-deps bot python bot.py --check-config
+docker compose -f docker-compose.yml -f docker-compose.build.yml \
+  run --rm --no-deps bot python bot.py --check-config
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
 ```
 
@@ -329,12 +330,13 @@ as missed, not run late.
 `/homelab` reads `/proc`, the CPU temperature in `/sys`, the disks in
 `HOMELAB_DISKS`, failed systemd units, Docker's container list (`GET
 /containers/json` on its API), `apt list --upgradable`, `/run/reboot-required`
-and the backups folder; it changes nothing. It warns when a disk has under 10% free, when a disk other than `/`
-isn't mounted, when a service has failed, when a container is stopped,
-restarting or unhealthy, when a reboot is required, and when no backup has
-completed for `BACKUP_MAX_AGE_HOURS`. With `HOMELAB_TEMP_ALERT_C` set, it also
-warns when the CPU reaches that temperature; the alert clears once it is 5 °C
-below. Waiting updates are listed but aren't a problem on their own.
+and the backups folder; it changes nothing. It warns when a disk has under 10%
+free, when a disk other than `/` isn't mounted, when a service has failed, when
+a container is stopped, restarting or unhealthy, when a reboot is required, and
+when no backup has completed for `BACKUP_MAX_AGE_HOURS`. With
+`HOMELAB_TEMP_ALERT_C` set, it also warns when the CPU reaches that temperature;
+the alert clears once it is 5 °C below. Waiting updates are listed but aren't a
+problem on their own.
 
 Every 10 minutes the bot checks the same things and sends one message when a
 problem appears and one ("back to normal") when it clears. Something that can't

@@ -63,6 +63,8 @@ SYS = Path("/sys")
 # hwmon drivers for the CPU's (or SoC's) temperature, read only when no thermal
 # zone has a reading (e.g. AMD's k10temp); others (nvme, iwlwifi, ...) never are.
 CPU_HWMON_DRIVERS = frozenset({"coretemp", "k10temp", "zenpower", "cpu_thermal", "soc_thermal"})
+# Thermal zones that aren't the CPU's: Intel Wi-Fi cards register one (iwlwifi_1).
+NON_CPU_ZONE_PREFIXES = ("iwlwifi",)
 # Above this a reading is junk; at or below 0 °C it's a sensor's "no value"
 # (some zones say -273200).
 MAX_PLAUSIBLE_C = 150
@@ -176,8 +178,11 @@ def read_temperature() -> tuple[str, float] | None:
     thermal zones, else from the CPU's hwmon driver. None if there's no sensor."""
     readings: list[tuple[str, float]] = []
     for zone in sorted((SYS / "class" / "thermal").glob("thermal_zone*")):
+        kind = read_sys(zone / "type") or zone.name
+        if kind.startswith(NON_CPU_ZONE_PREFIXES):
+            continue
         if (value := celsius(read_sys(zone / "temp"))) is not None:
-            readings.append((read_sys(zone / "type") or zone.name, value))
+            readings.append((kind, value))
     if not readings:
         for hwmon in sorted((SYS / "class" / "hwmon").glob("hwmon*")):
             if (name := read_sys(hwmon / "name")) not in CPU_HWMON_DRIVERS:
