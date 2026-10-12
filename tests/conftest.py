@@ -112,7 +112,7 @@ def keyboard_already_shown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
 def fresh_prompts() -> None:
     handlers._used_prompts.clear()  # pyright: ignore[reportPrivateUsage]
     auth._ignored.clear()  # pyright: ignore[reportPrivateUsage]
-    timers._asking_when = None  # pyright: ignore[reportPrivateUsage]
+    timers._asking_when.clear()  # pyright: ignore[reportPrivateUsage]
     handlers._last_refresh.clear()  # pyright: ignore[reportPrivateUsage]
     history._last_actions.clear()  # pyright: ignore[reportPrivateUsage]
     power.release_all()

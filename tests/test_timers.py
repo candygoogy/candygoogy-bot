@@ -22,6 +22,7 @@ from candygoogy import (
 )
 from tests.helpers import (
     AUTHORIZED_ID,
+    SECOND_ID,
     STRANGER_ID,
     FakeRun,
     button_data,
@@ -467,8 +468,8 @@ def test_stop_timers_cancels_but_keeps_file() -> None:
 # --- /schedule_* without a time asks "when?" ---------------------------------
 
 
-def typed(text: str) -> MagicMock:
-    update = make_update()
+def typed(text: str, user_id: int = AUTHORIZED_ID) -> MagicMock:
+    update = make_update(user_id)
     update.effective_message.text = text
     return update
 
@@ -583,6 +584,82 @@ def test_keyboard_tap_stops_listening_for_when() -> None:
     update = typed("30m")
     call(handlers.on_text, update)
     assert replies(update) == []
+
+
+# --- Two allowed users: each has their own "when?" -----------------------------
+
+
+@pytest.mark.usefixtures("two_allowed_users")
+def test_each_user_answers_only_their_own_when() -> None:
+    call_with_args(timers.schedule_wake, make_update(AUTHORIZED_ID))
+    call_with_args(timers.schedule_shutdown, make_update(SECOND_ID))
+    b = typed("30m", SECOND_ID)
+    call(handlers.on_text, b)
+    [text] = replies(b)
+    assert "Schedule a shutdown?" in text
+    assert button_data(b)[0].startswith("sched:shutdown:")
+    a = typed("1h")  # A's prompt is still open
+    call(handlers.on_text, a)
+    [text] = replies(a)
+    assert "Schedule a wake?" in text
+    assert button_data(a)[0].startswith("sched:wake:")
+
+
+@pytest.mark.usefixtures("two_allowed_users")
+def test_text_from_a_user_who_was_not_asked_is_ignored() -> None:
+    call_with_args(timers.schedule_shutdown, make_update(AUTHORIZED_ID))
+    b = typed("30m", SECOND_ID)
+    call(handlers.on_text, b)
+    assert replies(b) == []
+    a = typed("30m")
+    call(handlers.on_text, a)
+    assert "Schedule a shutdown?" in replies(a)[0]
+
+
+def moved_on(user_id: int, how: str) -> None:
+    """`user_id` leaves the "when?" prompt: a keyboard tap, Cancel, or a preset."""
+    if how == "keyboard":
+        call(handlers.on_text, typed("ℹ️ About", user_id))
+        return
+    data = {"cancel": "cancel:sched", "preset": "when:shutdown:1h"}[how]
+    call(handlers.on_button, make_button_press(data, message_id=user_id, user_id=user_id))
+
+
+@pytest.mark.usefixtures("two_allowed_users", "fake_run")
+@pytest.mark.parametrize("how", ["keyboard", "cancel", "preset"])
+def test_another_users_taps_leave_the_prompt_open(how: str) -> None:
+    call_with_args(timers.schedule_shutdown, make_update(AUTHORIZED_ID))
+    moved_on(SECOND_ID, how)
+    a = typed("30m")
+    call(handlers.on_text, a)
+    assert "Schedule a shutdown?" in replies(a)[0]
+
+
+@pytest.mark.usefixtures("two_allowed_users", "fake_run")
+@pytest.mark.parametrize("how", ["keyboard", "cancel", "preset"])
+def test_own_taps_close_the_prompt(how: str) -> None:
+    call_with_args(timers.schedule_shutdown, make_update(AUTHORIZED_ID))
+    moved_on(AUTHORIZED_ID, how)
+    a = typed("30m")
+    call(handlers.on_text, a)
+    assert replies(a) == []
+
+
+@pytest.mark.usefixtures("two_allowed_users")
+def test_each_user_has_their_own_time_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = [1000.0]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    call_with_args(timers.schedule_shutdown, make_update(AUTHORIZED_ID))
+    clock[0] += 100
+    call_with_args(timers.schedule_wake, make_update(SECOND_ID))
+    clock[0] += 30  # A was asked 130 s ago, B 30 s ago
+    a = typed("30m")
+    call(handlers.on_text, a)
+    assert replies(a) == []
+    assert AUTHORIZED_ID not in timers._asking_when  # pyright: ignore[reportPrivateUsage]
+    b = typed("30m", SECOND_ID)
+    call(handlers.on_text, b)
+    assert "Schedule a wake?" in replies(b)[0]
 
 
 # --- /timers with nothing set ---------------------------------------------------

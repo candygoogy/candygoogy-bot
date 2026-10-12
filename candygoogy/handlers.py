@@ -137,7 +137,8 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if name is None:
         await on_when_text(update, context)
         return
-    stop_asking_when()  # they moved on; a later message isn't an answer any more
+    if user := update.effective_user:
+        stop_asking_when(user.id)  # they moved on; a later message isn't an answer any more
     await COMMANDS[name](update, context)
 
 
@@ -490,7 +491,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await confirm_schedule(query, context, rest)
         return
     if query.data == "cancel:sched":
-        stop_asking_when()
+        stop_asking_when(query.from_user.id)
         await edit(query, "✖️ Cancelled. No timer set.")
         return
     fields = rest.split(":")

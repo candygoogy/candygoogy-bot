@@ -320,13 +320,14 @@ NOT_SAVED = "<i>⚠️ Couldn't save it to disk, so a bot restart will lose it. 
 WHEN_PRESETS = {"shutdown": ("15m", "30m", "1h", "2h"), "wake": ("1h", "4h", "8h", "12h")}
 # How long a typed reply still counts as the answer to "when?".
 ASK_WHEN_TTL_SECONDS = 120
-# (machine name, action, time.monotonic() when asked)
-_asking_when: tuple[str, str, float] | None = None
+# Per user ID, so one user's reply never answers another's prompt (only private
+# chats are allowed, so it's per chat too): (machine name, action,
+# time.monotonic() when asked).
+_asking_when: dict[int, tuple[str, str, float]] = {}
 
 
-def stop_asking_when() -> None:
-    global _asking_when
-    _asking_when = None
+def stop_asking_when(user_id: int) -> None:
+    _ = _asking_when.pop(user_id, None)
 
 
 def when_buttons(action: str, machine: Machine) -> InlineKeyboardMarkup:
@@ -384,10 +385,10 @@ async def ask_to_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE, ac
 
 async def schedule_for(update: Update, action: str, machine: Machine, args: list[str]) -> None:
     """Ask "when?" (no time given) or for confirmation of the given time."""
-    global _asking_when
     text = " ".join(args)
     if not text.strip():
-        _asking_when = (machine.name, action, time.monotonic())
+        if user := update.effective_user:
+            _asking_when[user.id] = (machine.name, action, time.monotonic())
         await reply(
             update,
             card(
@@ -409,15 +410,16 @@ async def schedule_for(update: Update, action: str, machine: Machine, args: list
 
 @authorized
 async def on_text(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
-    """A typed answer to "when?". Any other text is ignored, as before."""
-    global _asking_when
-    message = update.effective_message
-    if _asking_when is None or message is None or not message.text:
+    """A typed answer to this user's "when?". Any other text is ignored, as before."""
+    message, user = update.effective_message, update.effective_user
+    if user is None or message is None or not message.text:
         return
-    name, action, asked = _asking_when
+    if (asking := _asking_when.get(user.id)) is None:
+        return
+    name, action, asked = asking
     machine = machines.named(name)
     if time.monotonic() - asked > ASK_WHEN_TTL_SECONDS or machine is None:
-        _asking_when = None
+        stop_asking_when(user.id)
         return
     now = time.time()
     try:
@@ -425,14 +427,13 @@ async def on_text(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
     except ValueError as e:
         await reply(update, when_error(action, machine, e))  # still listening: they can retry
         return
-    _asking_when = None
+    stop_asking_when(user.id)
     await reply(update, *schedule_prompt(action, machine, due, now))
 
 
 async def on_when_button(query: CallbackQuery, rest: str) -> None:
     """A preset from "when?": rest is "<action>:<preset>[:<machine>]". Turns into
     the confirmation."""
-    global _asking_when
     fields = rest.split(":")
     action, preset = (fields + ["", ""])[:2]
     machine = machines.from_field(fields, 2)
@@ -445,7 +446,7 @@ async def on_when_button(query: CallbackQuery, rest: str) -> None:
     except ValueError:
         await edit(query, "✖️ Cancelled. No timer set.")
         return
-    _asking_when = None
+    stop_asking_when(query.from_user.id)
     await edit(query, *schedule_prompt(action, machine, due, now))
 
 

@@ -34,6 +34,7 @@ from candygoogy import (
 from candygoogy.settings import Machine
 from tests.helpers import (
     AUTHORIZED_ID,
+    SECOND_ID,
     FakeRun,
     call,
     call_with_args,
@@ -166,6 +167,23 @@ def test_schedule_without_a_time_asks_when_for_that_machine() -> None:
     typed.effective_message.text = "45m"
     call(handlers.on_text, typed)
     assert "<b>Schedule a shutdown of nas?</b>" in replies(typed)[0]
+
+
+@pytest.mark.usefixtures("fake_run", "two_allowed_users")
+def test_another_users_answer_never_names_my_machine() -> None:
+    call_with_args(handlers.COMMANDS["schedule_shutdown"], make_update(AUTHORIZED_ID), "nas")
+    call_with_args(handlers.COMMANDS["schedule_wake"], make_update(SECOND_ID), "mini")
+    b = make_update(SECOND_ID)
+    b.effective_message.text = "30m"
+    call(handlers.on_text, b)
+    [text] = replies(b)
+    assert "<b>Schedule a wake of mini?</b>" in text and "nas" not in text
+    assert reply_buttons(b)[0].startswith("sched:wake:") and reply_buttons(b)[0].endswith(":mini")
+    a = make_update(AUTHORIZED_ID)
+    a.effective_message.text = "1h"
+    call(handlers.on_text, a)
+    assert "<b>Schedule a shutdown of nas?</b>" in replies(a)[0]
+    assert reply_buttons(a)[0].endswith(":nas")
 
 
 # --- The picker ----------------------------------------------------------------------------
