@@ -6,7 +6,7 @@ All notable changes to candygoogy-bot are listed here. The format follows
 
 ## [Unreleased]
 
-## [1.0.0] - UNRELEASED
+## [1.0.0] - 2026-10-12
 
 The first versioned release.
 
