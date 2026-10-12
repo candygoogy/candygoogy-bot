@@ -19,7 +19,7 @@ from telegram.ext import (
     filters,
 )
 
-from candygoogy import digest, homelab, internet, pctime, weekly
+from candygoogy import digest, homelab, internet, pctime, schedules, weekly
 from candygoogy.about import record_startup_version
 from candygoogy.auth import is_authorized, is_guarded
 from candygoogy.config import AUTHORIZED_USER_IDS, BOT_TOKEN, STATE_DIR, App, check_ssh_key
@@ -96,7 +96,10 @@ def startup_report(
     missed: list[Timer],
     rebooted: str | None = None,
     dropped: list[Timer] | None = None,
+    schedule_lines: list[str] | None = None,
 ) -> str | None:
+    """What happened while the bot was offline, or None if nothing did.
+    `schedule_lines`: restore_schedules()'s dropped, missed and "off" lines."""
     lines: list[str] = [rebooted] if rebooted else []
     if ignored:
         counts = Counter(ignored)
@@ -113,9 +116,11 @@ def startup_report(
         lines.append(
             f"⚠️ Dropped the {t.action} timer of {escape(t.machine)}: that machine isn't configured any more."
         )
+    lines += schedule_lines or []
     if not lines:
         return None
     lines.extend(timer_line(t) for t in pending_timers())
+    lines.extend(schedules.schedule_line(s, due) for s, due in schedules.pending_schedules())
     return card("🟢", "Back online", *lines)
 
 
@@ -153,15 +158,17 @@ async def on_startup(app: App) -> None:
     await publish_command_menu(app)
     ignored = await skip_backlog(app)
     missed, dropped = restore_timers(app)
+    schedule_lines = schedules.restore_schedules(app)  # after the timers they defer to
     loop = asyncio.get_running_loop()
     _background[:] = [loop.create_task(run(app)) for run in BACKGROUND]
-    report = startup_report(ignored, missed, homelab.reboot_outcome(), dropped)
+    report = startup_report(ignored, missed, homelab.reboot_outcome(), dropped, schedule_lines)
     reported = report is not None and await notify_allowed(app, report, "the startup report")
     await show_keyboard(app, already_shown=reported)
 
 
 async def on_stop(app: App) -> None:
     await stop_timers(app)
+    await schedules.stop_schedules(app)
     for task in _background:
         _ = task.cancel()
 

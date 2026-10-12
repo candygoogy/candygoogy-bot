@@ -245,7 +245,9 @@ def shutdown_warning(timer: Timer, awake: bool) -> str:
     )
 
 
-async def warn_before_shutdown(app: App, timer: Timer) -> None:
+async def warn_before_shutdown(app: App, timer: Timer, buttons: bool = True) -> None:
+    """The warning before a shutdown; `buttons`: Cancel and +30m for this one-shot
+    timer (a repeating schedule's run has none of its own yet)."""
     if (machine := machines.named(timer.machine)) is None:
         return  # not configured any more
     awake = await probes.is_awake(machine)
@@ -254,19 +256,27 @@ async def warn_before_shutdown(app: App, timer: Timer) -> None:
             timer.chat_id,
             shutdown_warning(timer, awake),
             parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup([timer_buttons(timer)]),
+            reply_markup=InlineKeyboardMarkup([timer_buttons(timer)]) if buttons else None,
         )
     except TelegramError as e:
         log.warning("Could not send the shutdown warning: %s", e)
 
 
 async def fire_timer(app: App, timer: Timer) -> None:
-    if (machine := machines.named(timer.machine)) is None:
+    if machines.named(timer.machine) is None:
         return  # not configured any more (restore_timers drops those)
     audit(timer.action, "timer_fired", due=when_text(timer.due), machine=timer.machine)
-    post = chat_poster(app, timer.chat_id)
     title = f"Scheduled {timer.action}{of(timer.machine)}"
-    _ = await post(card("⏰", title, f"Set for {when_text(timer.due)}."))
+    await run_timed_action(app, timer, card("⏰", title, f"Set for {when_text(timer.due)}."))
+
+
+async def run_timed_action(app: App, timer: Timer, intro: str) -> None:
+    """What a timer does when it's due, after posting `intro` to its chat: wake,
+    or shut down with the usual follow-up. Repeating schedules run through it too."""
+    if (machine := machines.named(timer.machine)) is None:
+        return
+    post = chat_poster(app, timer.chat_id)
+    _ = await post(intro)
     if timer.action == "wake":
         await start_wake(machine, post, app_spawner(app))
         return
@@ -295,6 +305,12 @@ async def run_timer(app: App, timer: Timer) -> None:
         raise
     except Exception:
         log.exception("Timer for %s failed", timer.action)
+
+
+def one_shot_due(machine: str, action: str) -> float | None:
+    """When the one-shot timer for (machine, action) is due, if one is set."""
+    timer = _timers.get((machine, action))
+    return timer.due if timer is not None else None
 
 
 def start_timer(app: App, timer: Timer) -> None:

@@ -24,6 +24,7 @@ from candygoogy import (
     pctime,
     power,
     probes,
+    schedules,
     system,
     timers,
     wol,
@@ -56,7 +57,7 @@ def no_real_processes_or_sockets(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # Every module that reads the allowlist; test_allowlist.py checks none is missing.
-ALLOWLIST_READERS = (config, auth, messages, application, timers)
+ALLOWLIST_READERS = (config, auth, messages, application, timers, schedules)
 
 
 @pytest.fixture
@@ -156,6 +157,14 @@ def isolated_timers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(timers, "TIMERS_FILE", tmp_path / "timers.json")
     timers._timers.clear()  # pyright: ignore[reportPrivateUsage]
     timers._timer_tasks.clear()  # pyright: ignore[reportPrivateUsage]
+
+
+@pytest.fixture(autouse=True)
+def isolated_schedules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(schedules, "SCHEDULES_FILE", tmp_path / "schedules.json")
+    schedules._schedules.clear()  # pyright: ignore[reportPrivateUsage]
+    schedules._tasks.clear()  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(schedules, "_disabled", False)
 
 
 # --- /homelab ------------------------------------------------------------------
