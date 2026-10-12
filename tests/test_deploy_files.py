@@ -24,8 +24,9 @@ LINUX_RULE = ROOT / "deploy" / "targets" / "linux-power.rules"
 MACOS_SUDOERS = ROOT / "deploy" / "targets" / "macos-sudoers"
 DOCS = ROOT / "docs"
 
-# In .env.example but read by Python itself, not by the settings loader.
-NOT_THE_LOADERS = {"TZ"}
+# In .env.example but read by Python itself (TZ) or by docker-compose.yml
+# (CANDYGOOGY_TAG), not by the settings loader.
+NOT_THE_LOADERS = {"TZ", "CANDYGOOGY_TAG"}
 REQUIRED = {"BOT_TOKEN", "AUTHORIZED_USER_IDS"}
 # check-env.sh's names(): NAME=... or export NAME=..., at the start of a line.
 ASSIGNMENT = re.compile(r"^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=", re.MULTILINE)

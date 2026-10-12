@@ -1,7 +1,8 @@
 name: Docker image
 
-# Builds the image and checks it the way docker-compose.yml runs it. Nothing is
-# pushed anywhere, and the bot never reaches Telegram (no network, fake config).
+# Builds the image natively on amd64 and arm64 and checks it the way
+# docker-compose.yml runs it. Nothing is pushed anywhere (release.yml publishes),
+# and the bot never reaches Telegram (no network, fake config).
 on:
   push:
     branches: [main]
@@ -17,9 +18,18 @@ concurrency:
 
 jobs:
   image:
-    name: Build and smoke-test the image
-    runs-on: ubuntu-latest
+    name: Build and smoke-test the image (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          # GitHub's native arm64 runner (free for public repositories).
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
     env:
       IMAGE: candygoogy-bot:ci
     steps:
@@ -31,26 +41,35 @@ jobs:
       # Pinned by its multi-arch index digest; to refresh:
       # docker buildx imagetools inspect hadolint/hadolint:<version>
       - name: hadolint
+        if: matrix.platform == 'linux/amd64'
         run: docker run --rm -i hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d < Dockerfile
 
       - name: Build
         run: |
+          version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' candygoogy/__init__.py)
           docker build \
             --build-arg CANDYGOOGY_COMMIT="$GITHUB_SHA" \
+            --build-arg VERSION="$version" \
             --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             -t "$IMAGE" .
           docker image ls "$IMAGE"
 
+      # The same checks release.yml runs before it pushes anything.
       - name: Smoke tests
+        run: .github/scripts/smoke-image.sh "$IMAGE"
+
+      # A checkout made with umask 077 has files only their owner can read.
+      # The image must still be readable by the bot's user (UID 10001).
+      - name: Build from a private copy (chmod -R go-rwx)
+        if: matrix.platform == 'linux/amd64'
         run: |
           set -euo pipefail
-          # The flags docker-compose.yml runs the bot with.
-          harden=(--read-only --cap-drop ALL --security-opt no-new-privileges:true
-                  --tmpfs /tmp:size=16m --tmpfs /var/lib/candygoogy-bot:size=4m,mode=1777)
-          fail() { echo "::error::$*"; exit 1; }
-
-          # A fake but well-formed config: documentation MAC and IP, a token
-          # that has a token's shape but isn't one.
+          copy="$RUNNER_TEMP/private-copy"
+          mkdir "$copy"
+          git archive --format=tar HEAD | tar -x -C "$copy"
+          chmod -R go-rwx "$copy"
+          docker build --build-arg CANDYGOOGY_COMMIT="$GITHUB_SHA" -t "$IMAGE-private" "$copy"
+          # The same fake config as smoke-image.sh: documentation MAC and IP.
           cat > "$RUNNER_TEMP/fake.env" <<'EOF'
           BOT_TOKEN=123456:TEST-TOKEN-not-a-real-token-0000
           AUTHORIZED_USER_IDS=1111
@@ -59,71 +78,6 @@ jobs:
           SSH_USER=botuser
           SSH_KEY_PATH=/nonexistent/id_ed25519
           EOF
-
-          echo "Runs as the fixed non-root user."
-          [ "$(docker run --rm --network none "$IMAGE" id -u)" = 10001 ] || fail "not UID 10001"
-
-          echo "The package imports with the image's dependencies."
-          docker run --rm --network none "${harden[@]}" "$IMAGE" \
-            python -c "import candygoogy.settings, httpx, telegram, dotenv"
-
-          echo "--check-config accepts the fake config, and the commit from the build."
-          out=$(docker run --rm --network none "${harden[@]}" --env-file "$RUNNER_TEMP/fake.env" \
-                "$IMAGE" python bot.py --check-config)
-          [ "$out" = "OK: the configuration is valid." ] || fail "check-config said: $out"
-
-          echo "A bad config: exit 2, names the variable, never echoes the value."
-          for cmd in "python bot.py --check-config" "python bot.py"; do
-            set +e
-            # shellcheck disable=SC2086 # $cmd is split on purpose
-            out=$(docker run --rm --network none "${harden[@]}" \
-                  -e BOT_TOKEN=not-a-token-SMOKEMARKER "$IMAGE" $cmd 2>&1); code=$?
-            set -e
-            [ "$code" -eq 2 ] || { echo "$out"; fail "$cmd: expected exit 2, got $code"; }
-            grep -q "^- BOT_TOKEN doesn't look like a bot token" <<<"$out" || fail "$cmd: BOT_TOKEN not named"
-            if grep -q SMOKEMARKER <<<"$out"; then fail "$cmd: the error echoes a value"; fi
-          done
-
-          echo "A valid fake config starts and keeps running with no network at all"
-          echo "(it retries Telegram forever, so it never contacts anything)."
-          cid=$(docker run -d --network none "${harden[@]}" --env-file "$RUNNER_TEMP/fake.env" "$IMAGE")
-          sleep 10
-          running=$(docker inspect -f '{{.State.Running}}' "$cid")
-          docker logs --tail 20 "$cid" 2>&1 || true
-          docker rm -f "$cid" >/dev/null
-          [ "$running" = true ] || fail "the bot exited with a valid config"
-
-          echo "Unprivileged ping as UID 10001, no capabilities (uses the host's sysctl)."
-          echo "host ping_group_range: $(cat /proc/sys/net/ipv4/ping_group_range)"
-          if [ "$(awk '{print $1, $2}' /proc/sys/net/ipv4/ping_group_range)" = "1 0" ]; then
-            echo "The runner disallows ICMP sockets; widening it on this throwaway VM."
-            sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"
-          fi
-          docker run --rm --network host "${harden[@]}" "$IMAGE" ping -c 1 -W 2 127.0.0.1
-          docker run --rm --network none "$IMAGE" sh -c 'test ! -u /usr/bin/ping && test ! -g /usr/bin/ping'
-
-          echo "The host's neighbour table is readable (output not printed)."
-          docker run --rm --network host "${harden[@]}" "$IMAGE" ip neigh show >/dev/null
-
-          echo "ssh resolves the user and accepts the options (-G connects to nothing)."
-          docker run --rm --network none "${harden[@]}" "$IMAGE" \
-            ssh -G -o UserKnownHostsFile=/var/lib/candygoogy-bot/known_hosts example.invalid >/dev/null
-
-          echo "The root filesystem really is read-only."
-          if docker run --rm --network none "${harden[@]}" "$IMAGE" touch /app/x 2>/dev/null; then
-            fail "the root filesystem is writable"
-          fi
-
-      # A checkout made with umask 077 has files only their owner can read.
-      # The image must still be readable by the bot's user (UID 10001).
-      - name: Build from a private copy (chmod -R go-rwx)
-        run: |
-          set -euo pipefail
-          copy="$RUNNER_TEMP/private-copy"
-          mkdir "$copy"
-          git archive --format=tar HEAD | tar -x -C "$copy"
-          chmod -R go-rwx "$copy"
-          docker build --build-arg CANDYGOOGY_COMMIT="$GITHUB_SHA" -t "$IMAGE-private" "$copy"
           out=$(docker run --rm --network none --read-only --cap-drop ALL \
                 --security-opt no-new-privileges:true --env-file "$RUNNER_TEMP/fake.env" \
                 "$IMAGE-private" python bot.py --check-config)
@@ -131,7 +85,13 @@ jobs:
           docker run --rm --network none "$IMAGE-private" sh -c 'test ! -w /app && stat -c "%U %a" /app/bot.py'
 
       - name: Compose files are valid
+        if: matrix.platform == 'linux/amd64'
         run: |
+          set -euo pipefail
           cp .env.example .env
           docker compose -f docker-compose.yml config -q
+          docker compose -f docker-compose.yml -f docker-compose.build.yml config -q
           DOCKER_GID=999 docker compose -f docker-compose.yml -f docker-compose.docker-proxy.yml config -q
+          # The published image by default; a local build never takes its name.
+          [ "$(docker compose -f docker-compose.yml config --images)" = ghcr.io/candygoogy/candygoogy-bot:1 ]
+          [ "$(docker compose -f docker-compose.yml -f docker-compose.build.yml config --images)" = candygoogy-bot:local ]

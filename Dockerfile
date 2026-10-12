@@ -3,8 +3,10 @@
 # candygoogy-bot container image. Linux hosts with rootful Docker Engine only:
 # the bot needs the host's network (Wake-on-LAN broadcast, ARP table).
 #
-# Build:  docker build -t candygoogy-bot:local \
-#           --build-arg CANDYGOOGY_COMMIT="$(git rev-parse HEAD)" .
+# Released images are ghcr.io/candygoogy/candygoogy-bot, for amd64 and arm64
+# (.github/workflows/release.yml). To build it yourself:
+#   docker build -t candygoogy-bot:local \
+#     --build-arg CANDYGOOGY_COMMIT="$(git rev-parse HEAD)" .
 #
 # The base image is pinned by its multi-arch INDEX digest (amd64, arm64, ...),
 # and its Python matches the newest version CI tests (.github/workflows/ci.yml).
@@ -18,6 +20,9 @@ FROM python:3.14-slim-trixie@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2
 # /about since the image has no git checkout. Empty: /about says it's unknown.
 ARG CANDYGOOGY_COMMIT=
 ARG BUILD_DATE=
+# The release (__version__ in candygoogy/__init__.py), for the label below;
+# release.yml sets it. /about reads __version__ itself.
+ARG VERSION=
 ARG BOT_UID=10001
 ARG BOT_GID=10001
 
@@ -26,6 +31,7 @@ LABEL org.opencontainers.image.title="candygoogy-bot" \
       org.opencontainers.image.source="https://github.com/candygoogy/candygoogy-bot" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.revision="${CANDYGOOGY_COMMIT}" \
+      org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.base.name="docker.io/library/python:3.14-slim-trixie"
 

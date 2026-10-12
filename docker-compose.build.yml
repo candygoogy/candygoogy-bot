@@ -1,0 +1,16 @@
+# Optional: build the image from this checkout instead of pulling the published
+# one (e.g. to run a change, or on a platform without a released image).
+#
+#   export CANDYGOOGY_COMMIT="$(git rev-parse HEAD)"   # shown by /about
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml build
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
+#
+# The local image has its own name, so it is never mistaken for a released one.
+services:
+  bot:
+    build:
+      context: .
+      args:
+        CANDYGOOGY_COMMIT: ${CANDYGOOGY_COMMIT:-}
+    image: candygoogy-bot:local
+    pull_policy: build

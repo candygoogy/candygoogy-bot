@@ -82,17 +82,44 @@ PCs. Docker Desktop and rootless Docker can't send Wake-on-LAN packets to the LA
 
    Then set up each PC to accept that key: see [Preparing the machines](#preparing-the-machines).
 
-4. Build, check the configuration, and start:
+4. Pull the image, check the configuration, and start:
 
    ```sh
-   export CANDYGOOGY_COMMIT="$(git rev-parse HEAD)"   # shown by /about
-   docker compose build
+   docker compose pull
    docker compose run --rm --no-deps bot python bot.py --check-config
    docker compose up -d
    docker compose logs -f bot
    ```
 
 5. In Telegram, open a private chat with your bot and send `/start`.
+
+The image is `ghcr.io/candygoogy/candygoogy-bot`, for amd64 and arm64 (e.g. a
+Raspberry Pi with a 64-bit OS), published for every release from v1.0.0 on.
+`docker-compose.yml` follows the latest 1.x release; to pin one, set
+`CANDYGOOGY_TAG` in `.env` (see `.env.example`). Every image has a signed build
+provenance attestation, so you can check it was built by this repository's
+release workflow, from the tagged commit:
+
+```sh
+gh attestation verify oci://ghcr.io/candygoogy/candygoogy-bot:1 --owner candygoogy
+```
+
+<details>
+<summary><b>Build the image yourself instead</b></summary>
+
+`docker-compose.build.yml` builds the image from your checkout (as
+`candygoogy-bot:local`, never the published name). Use it for step 4:
+
+```sh
+export CANDYGOOGY_COMMIT="$(git rev-parse HEAD)"   # shown by /about
+docker compose -f docker-compose.yml -f docker-compose.build.yml build
+docker compose -f docker-compose.yml -f docker-compose.build.yml run --rm --no-deps bot python bot.py --check-config
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
+```
+
+Add `-f docker-compose.build.yml` to every later `docker compose` command too.
+
+</details>
 
 `--check-config` prints `OK: the configuration is valid.`, or lists the
 problems by variable name (never their values). The bot uses `ping` without any
@@ -476,15 +503,22 @@ Add `--upgrade` to move everything to the latest allowed versions.
 
 </details>
 
-GitHub Actions runs three workflows: [`ci.yml`](.github/workflows/ci.yml)
+GitHub Actions runs four workflows: [`ci.yml`](.github/workflows/ci.yml)
 (lint, types and tests on Python 3.11, 3.13 and 3.14, shellcheck),
-[`docker.yml`](.github/workflows/docker.yml) (builds the image and smoke-tests
-it offline) and [`audit.yml`](.github/workflows/audit.yml) (known
-vulnerabilities in both locks, also weekly).
+[`docker.yml`](.github/workflows/docker.yml) (builds the image on amd64 and
+arm64 and smoke-tests it offline), [`audit.yml`](.github/workflows/audit.yml)
+(known vulnerabilities in both locks, also weekly) and
+[`release.yml`](.github/workflows/release.yml) (on a `v*` tag: the same smoke
+tests on both platforms, then the image is pushed to GHCR with a provenance
+attestation). The smoke tests are
+[`.github/scripts/smoke-image.sh`](.github/scripts/smoke-image.sh), which runs
+on any Linux host with Docker.
 
 Releases follow [Semantic Versioning](https://semver.org/). What changed in each
 one is in [CHANGELOG.md](CHANGELOG.md); the version lives in
 `candygoogy/__init__.py`, and `pyproject.toml` and the changelog must match it.
+To release, replace `UNRELEASED` with the date in the changelog, merge, then push
+the tag `v<version>`; `release.yml` refuses a tag that doesn't match.
 
 ## License
 

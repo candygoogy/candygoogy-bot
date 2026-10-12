@@ -6,9 +6,15 @@
 #          sudo install -o root -g 10001 -m 640 <your key> ssh/id_ed25519
 #          (the container runs as UID/GID 10001: group 10001 lets it read the
 #          key, and root's ownership stops it from changing or deleting it)
-#   Start: CANDYGOOGY_COMMIT="$(git rev-parse HEAD)" docker compose up -d --build
+#   Start: docker compose pull && docker compose up -d
 #   Check: docker compose run --rm --no-deps bot python bot.py --check-config
 #   Logs:  docker compose logs -f bot
+#
+# The image is the published one, for amd64 and arm64. By default it follows
+# the latest 1.x release ("docker compose pull" updates it). To pin it, set
+# CANDYGOOGY_TAG in .env: an exact version (CANDYGOOGY_TAG=1.0.0), or a version
+# and its digest (CANDYGOOGY_TAG=1.0.0@sha256:<digest>), which can never change.
+# To build the image from this checkout instead, add docker-compose.build.yml.
 #
 # Docker containers in /homelab: add docker-compose.docker-proxy.yml (see there).
 # Never mount /var/run/docker.sock into this service: it is root on the host.
@@ -16,11 +22,7 @@ name: candygoogy
 
 services:
   bot:
-    build:
-      context: .
-      args:
-        CANDYGOOGY_COMMIT: ${CANDYGOOGY_COMMIT:-}
-    image: candygoogy-bot:local
+    image: ghcr.io/candygoogy/candygoogy-bot:${CANDYGOOGY_TAG:-1}
     # The host's network: the Wake-on-LAN broadcast must reach the LAN and
     # `ip neigh` must read the host's ARP table. No ports are opened.
     network_mode: host

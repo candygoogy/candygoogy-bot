@@ -26,6 +26,8 @@ The first versioned release.
 - `/about` shows the release and the commit it's running.
 - Only allowlisted users, in a private chat, can use the bot.
 - Runs as a locked-down Docker container or a hardened systemd service.
+- Published images, `ghcr.io/candygoogy/candygoogy-bot`, for amd64 and arm64,
+  with a signed build provenance attestation.
 
 ### Fixed
 

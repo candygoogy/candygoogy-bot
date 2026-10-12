@@ -17,7 +17,9 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCKERFILE = ROOT / "Dockerfile"
 DOCKERIGNORE = ROOT / ".dockerignore"
 COMPOSE = ROOT / "docker-compose.yml"
+BUILD_OVERLAY = ROOT / "docker-compose.build.yml"
 PROXY_OVERLAY = ROOT / "docker-compose.docker-proxy.yml"
+PUBLISHED = "ghcr.io/candygoogy/candygoogy-bot"
 WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
 EACH_WORKFLOW = [pytest.param(path, id=path.name) for path in WORKFLOWS]
 CI = ROOT / ".github" / "workflows" / "ci.yml"
@@ -192,7 +194,9 @@ def compose_variables(path: Path) -> set[str]:
     return set(found(r"^\s+(?:#\s*)?([A-Z][A-Z0-9_]*):", read(path)))
 
 
-@pytest.mark.parametrize("path", [pytest.param(p, id=p.name) for p in (COMPOSE, PROXY_OVERLAY)])
+@pytest.mark.parametrize(
+    "path", [pytest.param(p, id=p.name) for p in (COMPOSE, BUILD_OVERLAY, PROXY_OVERLAY)]
+)
 def test_compose_variables_are_known(path: Path) -> None:
     names = compose_variables(path)
     assert names
@@ -215,6 +219,32 @@ def test_compose_runs_the_bot_locked_down() -> None:
     ):
         assert line in text, line
     assert "cap_add" not in text and "privileged" not in text and "group_add" not in text
+
+
+def test_compose_runs_the_published_image() -> None:
+    """Pulled by default: the latest 1.x unless CANDYGOOGY_TAG pins a version or digest."""
+    text = uncommented(COMPOSE)
+    assert found(r"^    image: (\S+)$", text) == [f"{PUBLISHED}:${{CANDYGOOGY_TAG:-1}}"]
+    assert "build:" not in text
+    assert "CANDYGOOGY_TAG=1.0.0@sha256:" in read(COMPOSE)  # how to pin a digest
+
+
+def test_build_overlay_never_takes_the_published_name() -> None:
+    text = uncommented(BUILD_OVERLAY)
+    assert "    build:\n      context: .\n" in text
+    assert "CANDYGOOGY_COMMIT: ${CANDYGOOGY_COMMIT:-}" in text
+    assert found(r"^    image: (\S+)$", text) == ["candygoogy-bot:local"]
+    assert "pull_policy: build" in text
+    assert "ghcr.io" not in text
+
+
+def test_ci_checks_every_compose_file() -> None:
+    step = read(ROOT / ".github" / "workflows" / "docker.yml").split(
+        "- name: Compose files are valid", 1
+    )[1]
+    for path in (COMPOSE, BUILD_OVERLAY, PROXY_OVERLAY):
+        assert f"-f {path.name}" in step, path.name
+    assert f"= {PUBLISHED}:1 ]" in step and "= candygoogy-bot:local ]" in step
 
 
 def test_compose_never_mounts_docker_or_the_host_root() -> None:

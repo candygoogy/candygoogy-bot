@@ -81,5 +81,5 @@ jobs:
         run: venv/bin/pytest -q
 
       # shellcheck is preinstalled on GitHub's Ubuntu runners.
-      - name: shellcheck deploy scripts
-        run: shellcheck deploy/*.sh
+      - name: shellcheck deploy and CI scripts
+        run: shellcheck deploy/*.sh .github/scripts/*.sh
