@@ -2,4 +2,4 @@
 
 # The one version the code reads; pyproject.toml and CHANGELOG.md must agree
 # (tests/test_version.py).
-__version__ = "1.1.0"
+__version__ = "1.2.0"

@@ -6,6 +6,8 @@ All notable changes to candygoogy-bot are listed here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-13
+
 ### Added
 
 - Repeating schedules: `/schedule_shutdown weekdays 23:00` or
@@ -51,6 +53,7 @@ The first public release.
 - Only allowlisted users, in a private chat, can use the bot.
 - Runs as a locked-down Docker container or a hardened systemd service.
 
-[Unreleased]: https://github.com/candygoogy/candygoogy-bot/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/candygoogy/candygoogy-bot/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/candygoogy/candygoogy-bot/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/candygoogy/candygoogy-bot/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/candygoogy/candygoogy-bot/releases/tag/v1.0.0
