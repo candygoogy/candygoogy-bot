@@ -16,7 +16,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from candygoogy import machines
+from candygoogy import machines, repeating
 from candygoogy.about import about
 from candygoogy.auth import authorized, is_authorized
 from candygoogy.config import CONFIRM_TTL_SECONDS, Handler, audit
@@ -61,15 +61,8 @@ from candygoogy.timers import (
     on_timer_button,
     on_when_button,
     pending_timers,
-    schedule_for,
-    schedule_shutdown,
-    schedule_wake,
     stop_asking_when,
     timer_line,
-    timers,
-)
-from candygoogy.timers import (
-    on_text as on_when_text,
 )
 from candygoogy.weekly import week_message
 
@@ -88,9 +81,9 @@ HELP = [
     ("sleep", "😴", "Sleep (S3)"),
     ("reboot", "🔄", "Restart"),
     ("shutdown", "🔌", "Power off"),
-    ("schedule_shutdown", "⏰", "Power off later (asks when)"),
-    ("schedule_wake", "⏰", "Power on later (asks when)"),
-    ("timers", "📋", "Scheduled timers, cancel or postpone"),
+    ("schedule_shutdown", "⏰", "Power off later, or every weekday 23:00 (asks when)"),
+    ("schedule_wake", "⏰", "Power on later, or on chosen days (asks when)"),
+    ("timers", "📋", "Timers and repeating schedules: cancel, skip, delete"),
     ("logs", "📜", "Recent logs: all, audit, errors"),
     ("about", "ℹ️", "Version, uptime, where timers are saved"),
 ]
@@ -135,7 +128,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
     name = KEYBOARD_COMMANDS.get(message.text.strip()) if message and message.text else None
     if name is None:
-        await on_when_text(update, context)
+        await repeating.on_when_text(update, context)
         return
     if user := update.effective_user:
         stop_asking_when(user.id)  # they moved on; a later message isn't an answer any more
@@ -386,10 +379,10 @@ PICK_COMMANDS: dict[str, MachineCommand] = {
     "shutdown": lambda update, _context, machine, _args: ask_to_confirm(
         update, "shutdown", machine
     ),
-    "schedule_shutdown": lambda update, _context, machine, args: schedule_for(
+    "schedule_shutdown": lambda update, _context, machine, args: repeating.schedule_for(
         update, "shutdown", machine, args
     ),
-    "schedule_wake": lambda update, _context, machine, args: schedule_for(
+    "schedule_wake": lambda update, _context, machine, args: repeating.schedule_for(
         update, "wake", machine, args
     ),
 }
@@ -462,7 +455,10 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await on_pick_button(query, update, context, rest)
         return
     if kind == "timer":  # Cancel/+30m: each names the exact timer, so repeats are safe
-        await on_timer_button(query, context, rest)
+        await on_timer_button(query, context, rest, repeating.timers_message)
+        return
+    if kind == "rep":  # a repeating schedule's buttons: each names the exact run
+        await repeating.on_repeat_button(query, context, rest)
         return
     if kind == "when":  # a preset only asks for confirmation, on this same message
         await on_when_button(query, rest)
@@ -489,6 +485,9 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if kind == "sched":
         await confirm_schedule(query, context, rest)
+        return
+    if kind == "rsched":
+        await repeating.confirm_repeat(query, context, rest)
         return
     if query.data == "cancel:sched":
         stop_asking_when(query.from_user.id)
@@ -561,9 +560,9 @@ COMMANDS: dict[str, Handler] = {
     "sleep": sleep,
     "reboot": reboot,
     "shutdown": shutdown,
-    "schedule_shutdown": schedule_shutdown,
-    "schedule_wake": schedule_wake,
-    "timers": timers,
+    "schedule_shutdown": repeating.schedule_shutdown,
+    "schedule_wake": repeating.schedule_wake,
+    "timers": repeating.timers_command,
     "logs": logs,
     "about": about,
 }

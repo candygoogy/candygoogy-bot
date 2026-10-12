@@ -12,8 +12,10 @@ import time
 from collections.abc import Iterator
 from dataclasses import replace
 from datetime import date
+from typing import cast
 
 import pytest
+from telegram import InlineKeyboardButton
 
 from candygoogy import app as application
 from candygoogy import config, schedules, timers
@@ -151,6 +153,8 @@ def test_rule_text_is_canonical_and_round_trips(days: tuple[int, ...], text: str
         ("23:00", False),
         ("45m", False),
         ("monster 23:00", False),
+        ("mon-fri 23:00", True),  # refused by parse_rule, with the days' error
+        ("everyday 23:00", True),
         ("", False),
     ],
 )
@@ -374,7 +378,7 @@ class Engine:
     def __init__(self, monkeypatch: pytest.MonkeyPatch, clock: list[float]) -> None:
         self.clock: list[float] = clock
         self.slept: list[float] = []
-        self.warned: list[tuple[timers.Timer, bool]] = []
+        self.warned: list[tuple[timers.Timer, list[str]]] = []
         self.ran: list[tuple[timers.Timer, str, dict[str, object]]] = []
         self.jump: float = 0  # how far past each wake-up the clock lands
         self.app: object = fake_app()[0]
@@ -386,8 +390,11 @@ class Engine:
             self.slept.append(when)
             self.clock[0] = max(self.clock[0], when + self.jump)
 
-        async def warn(_app: object, timer: timers.Timer, buttons: bool = True) -> None:
-            self.warned.append((timer, buttons))
+        async def warn(
+            _app: object, timer: timers.Timer, buttons: list[InlineKeyboardButton] | None = None
+        ) -> None:
+            assert buttons is not None  # never the one-shot's Cancel/+30m
+            self.warned.append((timer, [cast(str, b.callback_data) for b in buttons]))
 
         async def run(_app: object, timer: timers.Timer, intro: str) -> None:
             self.ran.append((timer, intro, saved()))  # the file as the action starts
@@ -420,7 +427,7 @@ def test_a_shutdown_warns_then_runs_with_last_saved_first(engine: Engine) -> Non
     assert engine.slept == [at(MON, 23) - timers.TIMER_WARNING_SECONDS, at(MON, 23)]
     [(warned, buttons)] = engine.warned
     assert (warned.action, warned.due, warned.machine) == ("shutdown", at(MON, 23), FIRST)
-    assert buttons is False  # the one-shot's Cancel/+30m mustn't touch a schedule
+    assert buttons == ["rep:skipone:a1b2c3:20260706", "rep:later:a1b2c3:20260706"]
     [(timer, intro, file)] = engine.ran
     assert (timer.action, timer.due, timer.chat_id) == ("shutdown", at(MON, 23), AUTHORIZED_ID)
     assert "Repeating: weekdays 23:00." in intro
@@ -488,6 +495,23 @@ def test_a_clock_jump_past_the_grace_is_a_miss(engine: Engine) -> None:
     [text] = sent_texts(engine.app)  # pyright: ignore[reportArgumentType]
     assert "Missed the repeating wake (weekdays 07:30)" in text
     assert "The clock jumped past it." in text
+
+
+def test_a_failure_doesnt_stop_the_schedule(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(schedules, "RETRY_SECONDS", 0)
+    calls: list[float] = []
+
+    async def flaky(_app: object, timer: timers.Timer, _intro: str) -> None:
+        calls.append(timer.due)
+        if len(calls) == 1:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(timers, "run_timed_action", flaky)
+    engine.run(schedule(action="wake", hour_minute=(7, 30)), sleeps=2)
+    assert calls == [at(TUE, 7, 30), at(WED, 7, 30)]  # Tuesday's failed; Wednesday still ran
+    assert "Repeating schedule a1b2c3 failed; trying again" in caplog.text
 
 
 def test_a_run_due_at_startup_runs_first(engine: Engine) -> None:
@@ -571,9 +595,13 @@ def test_startup_drops_a_removed_machine_and_reports_it(caplog: pytest.LogCaptur
 
 
 @pytest.mark.usefixtures("armed", "clock")
-def test_startup_drops_a_removed_setter_quietly(caplog: pytest.LogCaptureFixture) -> None:
+def test_startup_drops_a_removed_setter_and_reports_it(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO)
-    assert restore(schedule(chat_id=STRANGER_ID, last=MON)) == []  # no line to anyone
+    [line] = restore(schedule(chat_id=STRANGER_ID, last=MON))
+    assert line == (
+        "⚠️ Dropped the repeating shutdown of workstation (weekdays 23:00): "
+        + "whoever set it is no longer allowed."
+    )
     assert schedules.pending_schedules() == []
     assert "reason=chat_not_allowed" in caplog.text
     assert str(STRANGER_ID) not in caplog.text

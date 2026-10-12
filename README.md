@@ -45,7 +45,8 @@ in 8s"), not just that it sent a command. It also watches the server itself.
 - **Wake-on-LAN** with a real follow-up: "Booted in 45s" or "Woke from sleep in 4s".
 - **Sleep, reboot and shut down** over SSH, each after a confirmation, then
   checked: "Shut down in 8s".
-- **Timers**: shut down at 22:30, wake in 8 hours; with a warning before a shutdown.
+- **Timers**: shut down at 22:30, wake in 8 hours, or every weekday at 23:00;
+  with a warning before a shutdown.
 - **Several machines**: Windows, and Linux and macOS (**experimental**), picked
   by name or with a button.
 - **Homelab health**: disks, temperature, failed services, Docker containers,
@@ -268,9 +269,9 @@ exit code 2 and a list of the variable names, never their values.
 | `/sleep` | Sleep, after a confirmation. |
 | `/reboot` | Restart, after a confirmation. |
 | `/shutdown` | Power off, after a confirmation. |
-| `/schedule_shutdown [when]` | Power off later: `45m`, `2h`, `1h30m`, `22:30`. Asks when if no time is given. |
-| `/schedule_wake [when]` | Power on later: `8h`, `06:45`. Asks when if no time is given. |
-| `/timers` | Pending timers, with Cancel (and +30m for a shutdown). |
+| `/schedule_shutdown [when]` | Power off later: `45m`, `2h`, `1h30m`, `22:30`, or repeating: `weekdays 23:00`. Asks when if no time is given. |
+| `/schedule_wake [when]` | Power on later: `8h`, `06:45`, or repeating: `mon,wed,fri 07:30`. Asks when if no time is given. |
+| `/timers` | Pending timers, with Cancel (and +30m for a shutdown), and repeating schedules, with Skip next and Delete. |
 | `/homelab` | The bot's host: uptime, load, temperature, RAM, disks, services, containers, updates, backups. |
 | `/net` | Internet outages in the last 7 days. |
 | `/summary` | The daily summary, now. |
@@ -321,6 +322,49 @@ Five minutes before a scheduled shutdown the bot sends a warning with Cancel and
 reports the result. Timers are saved in the state folder, so a restart keeps
 them; one that fell due more than 2 minutes before the bot came back is reported
 as missed, not run late.
+
+</details>
+
+<details>
+<summary><b>Repeating schedules</b></summary>
+
+`/schedule_shutdown` and `/schedule_wake` also take days and a time, and then
+repeat every week. With several machines the name comes first. You can also
+type a schedule as the answer to the "when?" prompt. A plain time, like
+`/schedule_shutdown 23:00`, stays a one-time timer.
+
+```text
+/schedule_shutdown weekdays 23:00
+/schedule_wake mon,wed,fri 07:30
+/schedule_shutdown nas weekends 01:00
+```
+
+The days are `daily`, `weekdays`, `weekends`, or day names separated by commas
+(`mon,wed,fri`; full names work too, ranges like `mon-fri` don't). The time is
+24-hour, in the bot's time zone, and the whole rule is at most 40 characters.
+Each machine can have 4 per action, 20 in total, and the same days and time
+can't be set twice. Setting one asks for confirmation, like a timer.
+
+Five minutes before a repeating shutdown the bot sends the same warning, with
+⏭ Skip this one and ⏰ +30m; both change only that run (+30m makes it a
+one-time timer). Wakes have no warning. `/timers` lists the schedules under
+"Repeating:", with ⏭ Skip next (↩️ Don't skip to undo) and 🗑 Delete. Messages
+go to the chat that set the schedule, and any allowed user can skip or delete
+any schedule.
+
+When clocks go forward, a time that doesn't exist that day (e.g. 02:30) runs
+at the first minute after the gap (03:00); when they go back, a time that
+happens twice runs once. A one-time timer for the same machine and action
+within 10 minutes of a run replaces that run: one warning, one shutdown.
+
+A run missed while the bot was down is listed in the "Back online" message and
+never run late (the bot looks back at most 7 days); one at most 2 minutes late
+still runs. At startup, a schedule whose machine is no longer configured, or
+whose setter is no longer in `AUTHORIZED_USER_IDS`, is dropped and named in the
+same message. Schedules are saved in `schedules.json` in the state folder, next
+to `timers.json`. If that file comes from a newer version of the bot (after a
+downgrade), repeating schedules are off, the bot says so at startup and in
+`/timers`, and the file is left alone until you upgrade again.
 
 </details>
 
@@ -386,7 +430,8 @@ last 1,000 records as a file. The bot token is masked in every log line.
 
 Commands sent while the bot was offline are not run when it comes back, since
 Telegram would deliver them all at once. Instead, the bot sends one "Back
-online" message listing what it ignored and any missed timers.
+online" message listing what it ignored and any missed timers and repeating
+runs.
 
 Telegram keeps showing the keyboard of the latest message that carried one, so
 `/start`, alerts, summaries and "Back online" all carry it. `/start` brings it
@@ -421,10 +466,11 @@ you.
   container list, use the filtering proxy (Docker) or point `DOCKER_HOST` at
   one (systemd). Adding the bot's user to Docker's group would give it root.
 - **What it stores:** small JSON files in the state folder
-  (`/var/lib/candygoogy-bot`, or the Docker volume): timers, the last power
-  action per machine, open alerts and the week's problem history, internet
-  outages, on-time checks, the keyboard last sent, and ssh's `known_hosts`. No
-  messages, no tokens. Recent log lines are kept in memory only.
+  (`/var/lib/candygoogy-bot`, or the Docker volume): timers (`timers.json`)
+  and repeating schedules (`schedules.json`), the last power action per
+  machine, open alerts and the week's problem history, internet outages,
+  on-time checks, the keyboard last sent, and ssh's `known_hosts`. No messages,
+  no tokens. Recent log lines are kept in memory only.
 
 Found a problem? See [SECURITY.md](SECURITY.md).
 
@@ -481,6 +527,8 @@ only from the ones above it.
 | `internet.py` | `/net`: the internet check and outage history |
 | `power.py` | Wake, shutdown, reboot, sleep, one at a time per machine, follow-ups |
 | `timers.py` | Scheduled shutdown and wake, and the "when?" prompt |
+| `schedules.py` | Repeating schedules: the rule, when each runs, schedules.json, the engine |
+| `repeating.py` | Repeating schedules in chat: setting, the confirmation, `/timers` and the warning buttons |
 | `pctime.py` | When each machine was on |
 | `digest.py` | `/summary` and the daily summary |
 | `weekly.py` | `/week` and the weekly report |

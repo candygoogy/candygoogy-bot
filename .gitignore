@@ -7,6 +7,8 @@ __pycache__/
 .pytest_cache/
 timers.json
 timers.tmp
+schedules.json
+schedules.tmp
 last_action.json
 last_action.tmp
 homelab_alerts.json

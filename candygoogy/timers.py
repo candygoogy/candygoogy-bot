@@ -245,9 +245,11 @@ def shutdown_warning(timer: Timer, awake: bool) -> str:
     )
 
 
-async def warn_before_shutdown(app: App, timer: Timer, buttons: bool = True) -> None:
-    """The warning before a shutdown; `buttons`: Cancel and +30m for this one-shot
-    timer (a repeating schedule's run has none of its own yet)."""
+async def warn_before_shutdown(
+    app: App, timer: Timer, buttons: list[InlineKeyboardButton] | None = None
+) -> None:
+    """The warning before a shutdown, with `buttons` (None: this one-shot
+    timer's Cancel and +30m; a repeating run brings its own)."""
     if (machine := machines.named(timer.machine)) is None:
         return  # not configured any more
     awake = await probes.is_awake(machine)
@@ -256,7 +258,9 @@ async def warn_before_shutdown(app: App, timer: Timer, buttons: bool = True) -> 
             timer.chat_id,
             shutdown_warning(timer, awake),
             parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup([timer_buttons(timer)]) if buttons else None,
+            reply_markup=InlineKeyboardMarkup(
+                [timer_buttons(timer) if buttons is None else buttons]
+            ),
         )
     except TelegramError as e:
         log.warning("Could not send the shutdown warning: %s", e)
@@ -334,6 +338,8 @@ NOT_SAVED = "<i>⚠️ Couldn't save it to disk, so a bot restart will lose it. 
 
 # /schedule_shutdown with no time asks for one: tap a preset or type it.
 WHEN_PRESETS = {"shutdown": ("15m", "30m", "1h", "2h"), "wake": ("1h", "4h", "8h", "12h")}
+# Repeating schedules (repeating.py) are set the same way, with day words.
+REPEAT_HINT = "To repeat: weekdays 23:00."
 # How long a typed reply still counts as the answer to "when?".
 ASK_WHEN_TTL_SECONDS = 120
 # Per user ID, so one user's reply never answers another's prompt (only private
@@ -344,6 +350,19 @@ _asking_when: dict[int, tuple[str, str, float]] = {}
 
 def stop_asking_when(user_id: int) -> None:
     _ = _asking_when.pop(user_id, None)
+
+
+def asking_when(user_id: int) -> tuple[Machine, str] | None:
+    """(machine, action) if this user's "when?" is still waiting for an answer;
+    an expired one (or one for a machine no longer configured) is dropped."""
+    if (asking := _asking_when.get(user_id)) is None:
+        return None
+    name, action, asked = asking
+    machine = machines.named(name)
+    if time.monotonic() - asked > ASK_WHEN_TTL_SECONDS or machine is None:
+        stop_asking_when(user_id)
+        return None
+    return machine, action
 
 
 def when_buttons(action: str, machine: Machine) -> InlineKeyboardMarkup:
@@ -380,13 +399,13 @@ def schedule_prompt(
     return "\n".join([title, *lines]), buttons
 
 
-def when_error(action: str, machine: Machine, error: ValueError) -> str:
+def when_error(action: str, machine: Machine, error: ValueError, example: str = "45m") -> str:
     name = f"{escape(machine.name)} " if machines.several() else ""
     return card(
         "⏰",
         f"Schedule a {action}{of(machine.name)}",
         str(error),
-        f"<i>e.g. /schedule_{action} {name}45m</i>",
+        f"<i>e.g. /schedule_{action} {name}{example}</i>",
     )
 
 
@@ -410,7 +429,7 @@ async def schedule_for(update: Update, action: str, machine: Machine, args: list
             card(
                 TIMER_ICON[action],
                 f"{TIMER_TITLE[action]}{of(machine.name)} when?",
-                f"Tap one, or type it: {TIMER_USAGE}.",
+                f"Tap one, or type it: {TIMER_USAGE}. {REPEAT_HINT}",
             ),
             when_buttons(action, machine),
         )
@@ -430,13 +449,9 @@ async def on_text(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
     message, user = update.effective_message, update.effective_user
     if user is None or message is None or not message.text:
         return
-    if (asking := _asking_when.get(user.id)) is None:
+    if (asking := asking_when(user.id)) is None:
         return
-    name, action, asked = asking
-    machine = machines.named(name)
-    if time.monotonic() - asked > ASK_WHEN_TTL_SECONDS or machine is None:
-        stop_asking_when(user.id)
-        return
+    machine, action = asking
     now = time.time()
     try:
         due = parse_when(message.text, now)
@@ -492,12 +507,14 @@ SCHEDULE_BUTTONS = InlineKeyboardMarkup(
 )
 
 
+NO_TIMERS = "Tap to set one, or send /schedule_shutdown or /schedule_wake."
+
+
 def timers_message() -> tuple[str, InlineKeyboardMarkup | None]:
+    """The one-shot timers; /timers itself also lists repeating schedules (repeating.py)."""
     pending = pending_timers()
     if not pending:
-        return card(
-            "⏰", "No timers", "Tap to set one, or send /schedule_shutdown or /schedule_wake."
-        ), SCHEDULE_BUTTONS
+        return card("⏰", "No timers", NO_TIMERS), SCHEDULE_BUTTONS
     lines = [timer_line(t) for t in pending]
     return card("⏰", "Timers", *lines), InlineKeyboardMarkup([timer_buttons(t) for t in pending])
 
@@ -551,18 +568,25 @@ async def confirm_schedule(
     await edit(query, card("⏰", f"{TIMER_TITLE[action]} scheduled", *lines))
 
 
+Listing = Callable[[], tuple[str, InlineKeyboardMarkup | None]]
+
+
 async def on_timer_button(
-    query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE, rest: str
+    query: CallbackQuery,
+    context: ContextTypes.DEFAULT_TYPE,
+    rest: str,
+    listing: Listing = timers_message,
 ) -> None:
     """Cancel or +30m, from /timers or the shutdown warning:
-    "<op>:<action>:<due>[:<machine>]"."""
+    "<op>:<action>:<due>[:<machine>]". `listing`: the /timers card to show
+    again when the button is stale."""
     fields = rest.split(":")
     op, action, due = (fields + ["", ""])[:3]
     machine = machines.from_field(fields, 3)
     timer = _timers.get((machine.name, action)) if machine is not None else None
     if timer is None or str(int(timer.due)) != due or op not in ("cancel", "snooze"):
         _ = await query.answer("That timer already ran or was changed.")
-        await edit(query, *timers_message())
+        await edit(query, *listing())
         return
     if op == "cancel":
         saved = cancel_timer(timer.key)

@@ -20,6 +20,8 @@ from datetime import date, timedelta
 from html import escape
 from typing import cast
 
+from telegram import InlineKeyboardButton
+
 from candygoogy import machines, timers
 from candygoogy.config import AUTHORIZED_USER_IDS, STATE_DIR, App, audit
 from candygoogy.messages import card, chat_poster
@@ -57,6 +59,8 @@ LOOK_BACK_DAYS = 7
 CANDIDATE_DAYS = 8
 # The longest clock change looked through for a time that doesn't exist.
 MAX_GAP_MINUTES = 180
+# After an unexpected failure, how long a schedule waits before carrying on.
+RETRY_SECONDS = 60.0
 ID = re.compile(r"[0-9a-f]{6}")
 ID_BYTES = 3
 
@@ -108,9 +112,10 @@ def parse_days(text: str) -> tuple[int, ...]:
 
 
 def starts_with_days(text: str) -> bool:
-    """Whether typed text is meant as a schedule: its first word names days."""
-    first = re.split(r"[\s,]", text.strip().lower(), maxsplit=1)[0]
-    return first in NAMED_DAYS or day_number(first) is not None
+    """Whether typed text is meant as a schedule: it starts with a day ("mon-fri"
+    and "everyday" too, so they get the schedule's error, not a timer's)."""
+    first = re.split(r"[\s,-]", text.strip().lower(), maxsplit=1)[0]
+    return first in NAMED_DAYS or first.startswith("every") or day_number(first) is not None
 
 
 def parse_rule(text: str) -> tuple[tuple[int, ...], tuple[int, int]]:
@@ -321,6 +326,21 @@ def load_schedules() -> tuple[list[Schedule], bool]:
 # --- Running -----------------------------------------------------------------------------
 
 
+# Button data for a repeating run: "rep:<op>:<id>[:<YYYYMMDD>]" (see repeating.py).
+def day_field(day: date) -> str:
+    return day.strftime("%Y%m%d")
+
+
+def warning_buttons(s: Schedule, day: date) -> list[InlineKeyboardButton]:
+    """Under a repeating shutdown's warning: skip this run, or move it by 30 minutes."""
+    return [
+        InlineKeyboardButton(
+            "⏭ Skip this one", callback_data=f"rep:skipone:{s.id}:{day_field(day)}"
+        ),
+        InlineKeyboardButton("⏰ +30m", callback_data=f"rep:later:{s.id}:{day_field(day)}"),
+    ]
+
+
 def as_timer(s: Schedule, due: float) -> Timer:
     """A run, as the one-shot timer code sees it (for the warning and the action)."""
     return Timer(s.action, due, s.chat_id, s.machine)
@@ -381,27 +401,39 @@ async def handle_run(app: App, sid: str, day: date, due: float) -> None:
         )
 
 
+async def next_one(app: App, sid: str, s: Schedule) -> None:
+    """Wait for the schedule's next run (warning first, for a shutdown), then handle it."""
+    day, due = next_run(s, time.time())
+    if s.action == "shutdown" and due - TIMER_WARNING_SECONDS > time.time():
+        await timers.sleep_until(due - TIMER_WARNING_SECONDS)
+        if (now := _schedules.get(sid)) is None:
+            return
+        if now.skip != day and not deferred(now, due):
+            buttons = warning_buttons(now, day)
+            await timers.warn_before_shutdown(app, as_timer(now, due), buttons)
+    await timers.sleep_until(due)
+    await handle_run(app, sid, day, due)
+
+
 async def run_schedule(app: App, sid: str, first: tuple[date, float] | None = None) -> None:
     """Runs a schedule until it's deleted or the bot stops; `first`: a run that
-    is due right away (at startup, within the grace)."""
-    try:
-        if first is not None:
+    is due right away (at startup, within the grace). A failure is logged and the
+    schedule carries on (`last` is saved before an action, so nothing repeats)."""
+    if first is not None:
+        try:
             await handle_run(app, sid, *first)
-        while (s := _schedules.get(sid)) is not None:
-            day, due = next_run(s, time.time())
-            if s.action == "shutdown" and due - TIMER_WARNING_SECONDS > time.time():
-                await timers.sleep_until(due - TIMER_WARNING_SECONDS)
-                if (s := _schedules.get(sid)) is None:
-                    return
-                if s.skip != day and not deferred(s, due):
-                    # No buttons yet: the one-shot's Cancel and +30m don't apply here.
-                    await timers.warn_before_shutdown(app, as_timer(s, due), buttons=False)
-            await timers.sleep_until(due)
-            await handle_run(app, sid, day, due)
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        log.exception("Repeating schedule %s failed", sid)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Repeating schedule %s failed", sid)
+    while (s := _schedules.get(sid)) is not None:
+        try:
+            await next_one(app, sid, s)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Repeating schedule %s failed; trying again", sid)
+            await asyncio.sleep(RETRY_SECONDS)
 
 
 def arm(app: App, s: Schedule, first: tuple[date, float] | None = None) -> None:
@@ -459,6 +491,10 @@ def restore_schedules(app: App) -> list[str]:
             # Not logged by ID, like everything else about who may use the bot.
             log.warning("Dropped a repeating %s: its chat is no longer allowed", s.action)
             audit_schedule(s, "schedule_dropped", reason="chat_not_allowed")
+            lines.append(
+                f"⚠️ Dropped the repeating {s.action} of {escape(s.machine)} ({s.rule}): "
+                + "whoever set it is no longer allowed."
+            )
             changed = True
             continue
         caught_up, line, run_now = catch_up(s, now)
@@ -491,6 +527,17 @@ def new_id() -> str:
     raise RuntimeError("No free schedule ID")  # 16 million IDs for at most 20 schedules
 
 
+def starting(s: Schedule, now: float) -> Schedule:
+    """A new schedule: runs before `now` count as handled, so only later ones run."""
+    runs = past_runs(s, now)
+    return replace(s, last=runs[-1][0]) if runs else s
+
+
+def first_run(days: tuple[int, ...], at: tuple[int, int], now: float) -> float:
+    """When a schedule set now would first run, for its confirmation."""
+    return next_occurrence(starting(Schedule("", "", "", days, at, 0), now), now)
+
+
 def add_schedule(
     app: App, machine: str, action: str, days: tuple[int, ...], at: tuple[int, int], chat_id: int
 ) -> tuple[Schedule, bool]:
@@ -510,10 +557,7 @@ def add_schedule(
         raise ScheduleError(
             f"There are already {MAX_SCHEDULES} repeating schedules. Delete one in /timers first."
         )
-    s = Schedule(new_id(), machine, action, days, at, chat_id)
-    # Runs before now count as handled: only the ones after it was set run.
-    if runs := past_runs(s, time.time()):
-        s = replace(s, last=runs[-1][0])
+    s = starting(Schedule(new_id(), machine, action, days, at, chat_id), time.time())
     saved = update(s)
     arm(app, s)
     audit_schedule(s, "schedule_set", saved=saved)

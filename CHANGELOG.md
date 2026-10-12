@@ -6,6 +6,13 @@ All notable changes to candygoogy-bot are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Repeating schedules: `/schedule_shutdown weekdays 23:00` or
+  `/schedule_wake mon,wed,fri 07:30` repeat every week, with a warning before
+  a shutdown (skip this one, or +30m), skip-next and delete in `/timers`, and
+  missed runs reported, never run late.
+
 ## [1.1.0] - 2026-10-12
 
 ### Added
