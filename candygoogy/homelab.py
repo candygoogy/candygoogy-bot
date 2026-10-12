@@ -21,6 +21,7 @@ from candygoogy.config import (
     BACKUP_MAX_AGE_HOURS,
     HOMELAB_DISKS,
     HOMELAB_HOST_ROOT,
+    HOMELAB_TEMP_ALERT_C,
     IN_CONTAINER,
     REPO_DIR,
     STATE_DIR,
@@ -54,6 +55,24 @@ REBOOT_REQUIRED = "reboot-required"
 # e.g. /host. Disks, mount checks and RUN are read under it; /proc needs no
 # prefix, since uptime, load and memory are the host's anyway.
 HOST_ROOT = HOMELAB_HOST_ROOT
+# Temperature sensors, read from this process's own /sys and never under
+# HOST_ROOT: sysfs is a mount of its own, so a bind mount of the host's / usually
+# doesn't contain it, while Docker mounts the host's sysfs read-only into the
+# container without masking class/thermal or class/hwmon.
+SYS = Path("/sys")
+# hwmon drivers for the CPU's (or SoC's) temperature, read only when no thermal
+# zone has a reading (e.g. AMD's k10temp); others (nvme, iwlwifi, ...) never are.
+CPU_HWMON_DRIVERS = frozenset({"coretemp", "k10temp", "zenpower", "cpu_thermal", "soc_thermal"})
+# Above this a reading is junk; at or below 0 °C it's a sensor's "no value"
+# (some zones say -273200).
+MAX_PLAUSIBLE_C = 150
+# HOMELAB_TEMP_ALERT_C: alert at or above it (None: never). An open alert clears
+# only TEMP_HYSTERESIS_C below it, so a reading hovering there doesn't alert and
+# clear every check.
+TEMP_ALERT_C = HOMELAB_TEMP_ALERT_C
+TEMP_HYSTERESIS_C = 5
+# Sensor labels come from sysfs; longer ones are cut.
+MAX_SENSOR_LABEL_CHARS = 40
 
 
 def on_host(path: str) -> str:
@@ -90,6 +109,7 @@ class Health:
     containers: list[Container] | None = None  # None if Docker couldn't be asked
     updates: list[str] | None = None  # upgradable packages; None if apt couldn't be asked
     reboot: list[str] | None = None  # packages waiting for a reboot; None if none is
+    temperature: tuple[str, float] | None = None  # (sensor label, °C); None: no sensor
     # Programs that aren't installed ("systemctl", "apt"), or "docker" if
     # nothing answers at DOCKER_HOST: their reading is None, and the card says
     # so instead of "Couldn't check".
@@ -133,6 +153,42 @@ def read_memory() -> tuple[float, float] | None:
     if "MemTotal" not in fields or "MemAvailable" not in fields:
         return None
     return fields["MemTotal"] - fields["MemAvailable"], fields["MemTotal"]
+
+
+def read_sys(path: Path) -> str | None:
+    """A sysfs file's text; None if unreadable (some zones answer EINVAL)."""
+    try:
+        return path.read_text().strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def celsius(millidegrees: str | None) -> float | None:
+    """A sensor's millidegrees as °C, or None if it isn't a plausible reading."""
+    if millidegrees is None or not is_number(millidegrees) or len(millidegrees) > 9:
+        return None  # also "-273200": is_number() takes digits only
+    value = int(millidegrees) / 1000
+    return value if 0 < value <= MAX_PLAUSIBLE_C else None
+
+
+def read_temperature() -> tuple[str, float] | None:
+    """The hottest plausible CPU temperature as (sensor label, °C): from the
+    thermal zones, else from the CPU's hwmon driver. None if there's no sensor."""
+    readings: list[tuple[str, float]] = []
+    for zone in sorted((SYS / "class" / "thermal").glob("thermal_zone*")):
+        if (value := celsius(read_sys(zone / "temp"))) is not None:
+            readings.append((read_sys(zone / "type") or zone.name, value))
+    if not readings:
+        for hwmon in sorted((SYS / "class" / "hwmon").glob("hwmon*")):
+            if (name := read_sys(hwmon / "name")) not in CPU_HWMON_DRIVERS:
+                continue
+            for sensor in sorted(hwmon.glob("temp*_input")):
+                if (value := celsius(read_sys(sensor))) is not None:
+                    readings.append((name, value))
+    if not readings:
+        return None
+    label, value = max(readings, key=lambda reading: reading[1])
+    return label[:MAX_SENSOR_LABEL_CHARS], value
 
 
 def disk_space(path: str) -> tuple[float, float] | None:
@@ -288,6 +344,7 @@ async def read_health() -> Health:
         containers=docker,
         updates=updates,
         reboot=reboot,
+        temperature=read_temperature(),
         missing=frozenset(missing),
         in_container=IN_CONTAINER,
         host_root=HOST_ROOT is not None,
@@ -359,6 +416,16 @@ def problems(health: Health, now: float) -> tuple[dict[str, Problem], set[str]]:
             if health.reboot
             else "An update installed since the last boot needs it.",
         )
+    if TEMP_ALERT_C is None or health.temperature is None:
+        unknown.add("temp")  # no alert set, or no sensor: an open alert stays as it is
+    else:
+        label, value = health.temperature
+        if value >= TEMP_ALERT_C:
+            found["temp"] = Problem(
+                "Running hot", f"{escape(label)} at {value:.0f} °C (alert at {TEMP_ALERT_C} °C)."
+            )
+        elif value >= TEMP_ALERT_C - TEMP_HYSTERESIS_C:
+            unknown.add("temp")  # just below the alert: neither opens nor clears one
     b = health.backups
     if b is None:  # backup monitoring is off
         unknown.add("backup")
@@ -446,6 +513,9 @@ def health_lines(health: Health, now: float) -> list[str]:
     if health.load is not None:
         one, five, fifteen = health.load
         up.append(f"load {one:.2f} {five:.2f} {fifteen:.2f} ({os.cpu_count() or '?'} cores)")
+    # A temperature that's alerting is described once, by the warning below.
+    if health.temperature is not None and "temp" not in found:
+        up.append(f"{health.temperature[1]:.0f} °C")
     if up:
         lines.append(" · ".join(up))
     if health.memory is not None:
@@ -602,10 +672,13 @@ def incidents_since(start: float) -> list[Incident]:
 
 
 def switched_off(key: str) -> bool:
-    """An alert whose check is turned off: backups without BACKUP_DIR; units, and
-    reboots without HOMELAB_HOST_ROOT, in a container."""
+    """An alert whose check is turned off: backups without BACKUP_DIR; the
+    temperature without HOMELAB_TEMP_ALERT_C; units, and reboots without
+    HOMELAB_HOST_ROOT, in a container."""
     if key == "backup":
         return BACKUP_DIR is None
+    if key == "temp":
+        return TEMP_ALERT_C is None
     if key == "reboot":
         return IN_CONTAINER and HOST_ROOT is None
     return IN_CONTAINER and key.startswith("unit:")

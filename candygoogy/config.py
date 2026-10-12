@@ -52,6 +52,8 @@ IN_CONTAINER = SETTINGS.in_container
 # The host's / as mounted in a container (e.g. /host), for disks and
 # /run/reboot-required; None: this process's own /.
 HOMELAB_HOST_ROOT = SETTINGS.homelab_host_root
+# /homelab alerts when the host's CPU reaches this many °C; None: never.
+HOMELAB_TEMP_ALERT_C = SETTINGS.homelab_temp_alert_c
 # Docker Engine's API, which /homelab asks for the containers: "unix:///<path>"
 # or "tcp://<host>:<port>".
 DOCKER_HOST = SETTINGS.docker_host

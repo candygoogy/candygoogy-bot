@@ -68,6 +68,7 @@ KNOWN_VARIABLES = (
     "WEEKLY_REPORT",
     "HOMELAB_DISKS",
     "HOMELAB_HOST_ROOT",
+    "HOMELAB_TEMP_ALERT_C",
     "BACKUP_DIR",
     "INTERNET_CHECK_TARGETS",
     "DOCKER_HOST",
@@ -160,6 +161,8 @@ class Settings:
     # The host's / as mounted in a container (e.g. /host); None: read / itself.
     homelab_host_root: str | None = None
     commit: str | None = None  # CANDYGOOGY_COMMIT: the image's commit, for /about
+    # /homelab alerts at or above this many °C; None: no temperature alert.
+    homelab_temp_alert_c: int | None = None
 
 
 def key_path(value: str | None, label: str, default: str, problems: list[str]) -> str | None:
@@ -567,6 +570,13 @@ def hours(text: str) -> float:
     return value
 
 
+def temp_limit(text: str) -> int:
+    """Whole degrees Celsius from 40 to 110; ValueError (without the value) if not."""
+    if not is_number(text) or len(text) > 3 or not 40 <= int(text) <= 110:
+        raise ValueError("must be a whole number of °C from 40 to 110, e.g. 85")
+    return int(text)
+
+
 def load_settings(env: Mapping[str, str]) -> Settings:
     """Every setting, checked. Raises ConfigError listing all problems at once."""
     problems: list[str] = []
@@ -658,6 +668,12 @@ def load_settings(env: Mapping[str, str]) -> Settings:
             host_root = posix_path(root_text)
         except ValueError as e:
             problems.append(f"HOMELAB_HOST_ROOT {e}.")
+    temp_alert = None
+    if temp_text := env.get("HOMELAB_TEMP_ALERT_C", "").strip():  # unset or empty: no alert
+        try:
+            temp_alert = temp_limit(temp_text)
+        except ValueError as e:
+            problems.append(f"HOMELAB_TEMP_ALERT_C {e}.")
     docker = DEFAULT_DOCKER_HOST
     if docker_text := env.get("DOCKER_HOST", "").strip():
         try:
@@ -701,4 +717,5 @@ def load_settings(env: Mapping[str, str]) -> Settings:
         docker_host=docker,
         homelab_host_root=host_root,
         commit=build_commit,
+        homelab_temp_alert_c=temp_alert,
     )

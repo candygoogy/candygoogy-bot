@@ -20,6 +20,8 @@ The first versioned release.
 - Homelab health in `/homelab`: disks, failed services, Docker containers,
   updates, pending reboots and backups, with alerts when something goes wrong
   and when it clears.
+- The host's CPU temperature in `/homelab`, from its thermal zones or CPU
+  sensor, with an optional alert (`HOMELAB_TEMP_ALERT_C`).
 - Internet outages: noticed, timed and reported when the connection is back.
 - A daily summary and a weekly report, sent at times you choose.
 - Logs in the chat: recent lines, or everything as a file.

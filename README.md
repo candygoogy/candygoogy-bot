@@ -48,8 +48,9 @@ in 8s"), not just that it sent a command. It also watches the server itself.
 - **Timers**: shut down at 22:30, wake in 8 hours; with a warning before a shutdown.
 - **Several machines**: Windows, and Linux and macOS (**experimental**), picked
   by name or with a button.
-- **Homelab health**: disks, failed services, Docker containers, updates, pending
-  reboots and backups, with alerts when something goes wrong and when it clears.
+- **Homelab health**: disks, temperature, failed services, Docker containers,
+  updates, pending reboots and backups, with alerts when something goes wrong and
+  when it clears.
 - **Internet outages**: noticed, timed and reported when the connection is back.
 - **A daily summary and a weekly report**, sent at times you choose.
 - **Logs in the chat**: recent lines, or everything as a file.
@@ -247,6 +248,7 @@ exit code 2 and a list of the variable names, never their values.
 | `HOMELAB_DISKS` | `/` | Disks `/homelab` watches; paths other than `/` must stay mounted. |
 | `BACKUP_DIR` | off | Where your backup job writes its snapshot folders. |
 | `BACKUP_MAX_AGE_HOURS` | `26` | Hours without a completed backup before a warning. |
+| `HOMELAB_TEMP_ALERT_C` | off | Alert when the host's CPU reaches this many °C (40 to 110). |
 | `DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker's API for the container list (`unix://` or `tcp://`). |
 | `INTERNET_CHECK_TARGETS` | `1.1.1.1:443,9.9.9.9:443` | Where the internet check connects (1 to 5). |
 | `CANDYGOOGY_IN_CONTAINER` | `0` | `1` in a container (the image sets it): host-only checks are skipped. |
@@ -268,7 +270,7 @@ exit code 2 and a list of the variable names, never their values.
 | `/schedule_shutdown [when]` | Power off later: `45m`, `2h`, `1h30m`, `22:30`. Asks when if no time is given. |
 | `/schedule_wake [when]` | Power on later: `8h`, `06:45`. Asks when if no time is given. |
 | `/timers` | Pending timers, with Cancel (and +30m for a shutdown). |
-| `/homelab` | The bot's host: uptime, load, RAM, disks, services, containers, updates, backups. |
+| `/homelab` | The bot's host: uptime, load, temperature, RAM, disks, services, containers, updates, backups. |
 | `/net` | Internet outages in the last 7 days. |
 | `/summary` | The daily summary, now. |
 | `/week` | The weekly report, now. |
@@ -324,14 +326,15 @@ as missed, not run late.
 <details>
 <summary><b>Homelab health and alerts</b></summary>
 
-`/homelab` reads `/proc`, the disks in `HOMELAB_DISKS`, failed systemd units,
-Docker's container list (`GET /containers/json` on its API), `apt list
---upgradable`, `/run/reboot-required` and the backups folder; it changes
-nothing. It warns when a disk has under 10% free, when a disk other than `/`
+`/homelab` reads `/proc`, the CPU temperature in `/sys`, the disks in
+`HOMELAB_DISKS`, failed systemd units, Docker's container list (`GET
+/containers/json` on its API), `apt list --upgradable`, `/run/reboot-required`
+and the backups folder; it changes nothing. It warns when a disk has under 10% free, when a disk other than `/`
 isn't mounted, when a service has failed, when a container is stopped,
 restarting or unhealthy, when a reboot is required, and when no backup has
-completed for `BACKUP_MAX_AGE_HOURS`. Waiting updates are listed but aren't a
-problem on their own.
+completed for `BACKUP_MAX_AGE_HOURS`. With `HOMELAB_TEMP_ALERT_C` set, it also
+warns when the CPU reaches that temperature; the alert clears once it is 5 °C
+below. Waiting updates are listed but aren't a problem on their own.
 
 Every 10 minutes the bot checks the same things and sends one message when a
 problem appears and one ("back to normal") when it clears. Something that can't

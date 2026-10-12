@@ -32,6 +32,7 @@ for name in (
     "MACHINES_FILE",
     "SSH_KNOWN_HOSTS",
     "HOMELAB_HOST_ROOT",
+    "HOMELAB_TEMP_ALERT_C",
     "DOCKER_HOST",
 ):
     _ = os.environ.pop(name, None)

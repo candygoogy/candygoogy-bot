@@ -166,6 +166,8 @@ def isolated_homelab_alerts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(homelab, "ALERTS_FILE", tmp_path / "homelab_alerts.json")
     monkeypatch.setattr(homelab, "REBOOT_FILE", tmp_path / "homelab_reboot.json")
     monkeypatch.setattr(homelab, "INCIDENTS_FILE", tmp_path / "homelab_history.json")
+    # Never the machine's own sensors (a CI runner has some): no /sys at all.
+    monkeypatch.setattr(homelab, "SYS", tmp_path / "no-sys")
     homelab._open_alerts.clear()  # pyright: ignore[reportPrivateUsage]
     homelab._incidents.clear()  # pyright: ignore[reportPrivateUsage]
 

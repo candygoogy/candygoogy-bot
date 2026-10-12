@@ -307,6 +307,11 @@ class FakeHomelab:
         self.run_dir: Path = tmp_path / "run"
         self.run_dir.mkdir()
         monkeypatch.setattr(homelab, "RUN", str(self.run_dir))
+        # sysfs with no temperature sensors until zone() or hwmon() adds some.
+        self.sys: Path = tmp_path / "sys"
+        (self.sys / "class" / "thermal").mkdir(parents=True)
+        (self.sys / "class" / "hwmon").mkdir()
+        monkeypatch.setattr(homelab, "SYS", self.sys)
         # Docker's API: what it answers, and every request it got.
         self.docker_answer: httpx.Response | Exception = httpx.Response(200, json=[])
         self.docker_requests: list[httpx.Request] = []
@@ -343,6 +348,29 @@ class FakeHomelab:
             _ = (self.run_dir / "reboot-required.pkgs").write_text(
                 "".join(f"{p}\n" for p in packages)
             )
+
+    def zone(self, kind: str, temp: str | None) -> Path:
+        """A thermal zone of type `kind` whose temp file says `temp` (None:
+        unreadable, as a zone answering EINVAL is)."""
+        zones = self.sys / "class" / "thermal"
+        folder = zones / f"thermal_zone{len(list(zones.iterdir()))}"
+        folder.mkdir()
+        _ = (folder / "type").write_text(f"{kind}\n")
+        if temp is None:
+            (folder / "temp").mkdir()  # reading a directory fails like EINVAL
+        else:
+            _ = (folder / "temp").write_text(f"{temp}\n")
+        return folder
+
+    def hwmon(self, name: str, *temps: str) -> Path:
+        """An hwmon device of driver `name` with temp1_input, temp2_input, ..."""
+        devices = self.sys / "class" / "hwmon"
+        folder = devices / f"hwmon{len(list(devices.iterdir()))}"
+        folder.mkdir()
+        _ = (folder / "name").write_text(f"{name}\n")
+        for n, temp in enumerate(temps, start=1):
+            _ = (folder / f"temp{n}_input").write_text(f"{temp}\n")
+        return folder
 
     def snapshot(
         self, name: str, age_hours: float = 1, size: int = 1024, complete: bool = True
