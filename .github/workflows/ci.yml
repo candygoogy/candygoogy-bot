@@ -21,8 +21,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.11 is the oldest supported version; 3.13 is a current one.
-        python: ["3.11", "3.13"]
+        # 3.11 is the oldest supported version, 3.14 the newest (the image's).
+        python: ["3.11", "3.13", "3.14"]
     steps:
       # Actions are pinned to commit SHAs so a moved tag can't change what runs.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

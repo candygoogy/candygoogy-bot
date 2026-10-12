@@ -28,7 +28,7 @@ venv/bin/python -m pip install --require-hashes -r requirements-dev.txt   # Wind
 ```
 
 Before opening a pull request, run all four checks; CI runs the same ones on
-Python 3.11 and 3.13:
+Python 3.11, 3.13 and 3.14:
 
 ```sh
 pytest

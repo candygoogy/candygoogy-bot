@@ -9,10 +9,10 @@
 # The base image is pinned by its multi-arch INDEX digest (amd64, arm64, ...),
 # and its Python matches the newest version CI tests (.github/workflows/ci.yml).
 # To refresh the digest:
-#   docker buildx imagetools inspect python:3.13-slim-trixie
+#   docker buildx imagetools inspect python:3.14-slim-trixie
 #   (copy the top-level "Digest: sha256:..." line)
 # then replace it below, rebuild, and let CI run.
-FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f
+FROM python:3.14-slim-trixie@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170
 
 # The commit this image is built from (40 or at least 7 of 0-9 a-f), shown by
 # /about since the image has no git checkout. Empty: /about says it's unknown.
@@ -27,7 +27,7 @@ LABEL org.opencontainers.image.title="candygoogy-bot" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.revision="${CANDYGOOGY_COMMIT}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.base.name="docker.io/library/python:3.13-slim-trixie"
+      org.opencontainers.image.base.name="docker.io/library/python:3.14-slim-trixie"
 
 # Every name here is one the bot reads (tests/test_docker.py checks that), or
 # Python's or pip's own.

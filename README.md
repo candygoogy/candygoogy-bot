@@ -477,7 +477,7 @@ Add `--upgrade` to move everything to the latest allowed versions.
 </details>
 
 GitHub Actions runs three workflows: [`ci.yml`](.github/workflows/ci.yml)
-(lint, types and tests on Python 3.11 and 3.13, shellcheck),
+(lint, types and tests on Python 3.11, 3.13 and 3.14, shellcheck),
 [`docker.yml`](.github/workflows/docker.yml) (builds the image and smoke-tests
 it offline) and [`audit.yml`](.github/workflows/audit.yml) (known
 vulnerabilities in both locks, also weekly).
