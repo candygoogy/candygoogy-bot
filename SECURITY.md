@@ -21,7 +21,7 @@ Helpful to include:
 - what an attacker can do, and what they need first (e.g. "anyone who can send
   the bot a message", "a user on the bot's host", "someone on the LAN");
 - the steps to reproduce it, or a proof of concept;
-- the commit you tested (`/about` shows it) and how the bot runs (Docker or
+- the release and commit you tested (`/about` shows both) and how the bot runs (Docker or
   systemd; the target machines' operating systems);
 - anything you've found about a fix.
 
@@ -37,8 +37,14 @@ rather not be.
 
 ## Supported versions
 
-Only the latest commit on `main` is supported. Please update to it before
-reporting, and check that the problem is still there.
+| Version | Supported |
+|---|---|
+| The latest release (1.x) | Yes |
+| The latest commit on `main` | Yes |
+| Anything older | No |
+
+Please update to one of them before reporting, and check that the problem is
+still there. [CHANGELOG.md](CHANGELOG.md) lists what each release changed.
 
 ## How the bot is meant to be safe
 

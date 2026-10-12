@@ -18,7 +18,7 @@ import telegram
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from candygoogy import system
+from candygoogy import __version__, system
 from candygoogy.auth import authorized
 from candygoogy.config import BUILD_COMMIT, REPO_DIR, STARTED_AT, STATE_DIR
 from candygoogy.messages import card, duration, reply, typing
@@ -86,15 +86,19 @@ def stamp(when: float) -> str:
 
 
 def version_line(version: VersionResult) -> str:
+    """The release, then the commit it's running (or why that's unknown)."""
+    release = f"candygoogy {__version__} · "
     if isinstance(version, str):
-        return f"Version unknown <i>({escape(version[:200])})</i>."
+        return release + f"Commit unknown <i>({escape(version[:200])})</i>."
     if isinstance(version, Build):
         commit = escape(version.commit[:SHORT_COMMIT_CHARS])
-        return f"Running <code>{commit}</code> <i>(the commit the image was built from)</i>."
+        return release + (
+            f"Running <code>{commit}</code> <i>(the commit the image was built from)</i>."
+        )
     subject = version.subject
     if len(subject) > MAX_SUBJECT_CHARS:
         subject = subject[: MAX_SUBJECT_CHARS - 1] + "…"
-    line = f"Running <code>{escape(version.commit)}</code> · {escape(subject)}"
+    line = release + f"Running <code>{escape(version.commit)}</code> · {escape(subject)}"
     line += f" <i>(committed {stamp(version.committed)})</i>"
     if version.dirty:
         line += "\n⚠️ The checkout has uncommitted changes."

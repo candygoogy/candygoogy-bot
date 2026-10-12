@@ -37,7 +37,7 @@ in 8s"), not just that it sent a command. It also watches the server itself.
 - [Commands](#commands)
 - [How each feature works](#how-each-feature-works)
 - [Security model](#security-model)
-- [Development](#development)
+- [Development](#development) and [Changelog](CHANGELOG.md)
 - [License](#license) and [Contact](#contact)
 
 ## Features
@@ -246,7 +246,7 @@ exit code 2 and a list of the variable names, never their values.
 | `/summary` | The daily summary, now. |
 | `/week` | The weekly report, now. |
 | `/logs [audit\|errors]` | Recent log lines; 📄 File sends everything kept. |
-| `/about` | The running commit, uptime, versions, where state is saved, the time zone. |
+| `/about` | The release and running commit, uptime, versions, where state is saved, the time zone. |
 
 A keyboard under the message box has buttons for the common commands (Wake,
 Status, Homelab, Sleep, Reboot, Shut down, Timers, Logs, About, Internet,
@@ -481,6 +481,10 @@ GitHub Actions runs three workflows: [`ci.yml`](.github/workflows/ci.yml)
 [`docker.yml`](.github/workflows/docker.yml) (builds the image and smoke-tests
 it offline) and [`audit.yml`](.github/workflows/audit.yml) (known
 vulnerabilities in both locks, also weekly).
+
+Releases follow [Semantic Versioning](https://semver.org/). What changed in each
+one is in [CHANGELOG.md](CHANGELOG.md); the version lives in
+`candygoogy/__init__.py`, and `pyproject.toml` and the changelog must match it.
 
 ## License
 

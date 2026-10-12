@@ -1,3 +1,17 @@
+[project]
+name = "candygoogy-bot"
+version = "1.0.0"
+description = "Telegram bot: Wake-on-LAN, power control and status for machines on your LAN"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+# No dependencies or [build-system]: requirements.txt is the hash-locked source of both.
+
+[project.urls]
+Homepage = "https://github.com/candygoogy/candygoogy-bot"
+Changelog = "https://github.com/candygoogy/candygoogy-bot/blob/main/CHANGELOG.md"
+Issues = "https://github.com/candygoogy/candygoogy-bot/issues"
+
 [tool.ruff]
 # Supports Python 3.11+; keep the code compatible.
 target-version = "py311"

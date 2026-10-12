@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from candygoogy import (
+    __version__,
     about,
     auth,
     config,
@@ -28,6 +29,8 @@ from tests.helpers import (
 # --- /about --------------------------------------------------------------------
 
 
+# What /about's first line starts with.
+RELEASE = f"candygoogy {__version__} · "
 GIT_LOG = system.RunResult(0, out="abc1234\x1fAdd /about\x1f1759400000\n")
 
 
@@ -47,7 +50,7 @@ def test_about_shows_commit_uptime_and_versions(fake_run: FakeRun) -> None:
     script_git(fake_run, GIT_LOG)
     asyncio.run(about.record_startup_version())
     text = about_text()
-    assert "Running <code>abc1234</code> · Add /about" in text
+    assert RELEASE + "Running <code>abc1234</code> · Add /about" in text
     assert "Up " in text and "Python " in text and "python-telegram-bot " in text
     assert "uncommitted" not in text and "not running" not in text
     # Only read-only git queries, nothing else:
@@ -82,7 +85,7 @@ def test_about_survives_git_problems(fake_run: FakeRun, log: system.RunResult, r
     script_git(fake_run, log)
     asyncio.run(about.record_startup_version())
     text = about_text()
-    assert "Version unknown" in text and reason in text
+    assert RELEASE + "Commit unknown" in text and reason in text
     assert "more" not in text  # only git's first error line
 
 
@@ -103,8 +106,9 @@ def test_about_shows_the_image_commit_without_a_checkout(
     monkeypatch.setattr(about, "BUILD_COMMIT", IMAGE_COMMIT)
     asyncio.run(about.record_startup_version())
     text = about_text()
-    assert "Running <code>0123456</code> <i>(the commit the image was built from)</i>." in text
-    assert "Version unknown" not in text and "not running" not in text
+    image_line = "Running <code>0123456</code> <i>(the commit the image was built from)</i>."
+    assert RELEASE + image_line in text
+    assert "Commit unknown" not in text and "not running" not in text
     assert fake_run.calls == []  # git isn't asked (the image has none)
 
 
@@ -125,7 +129,7 @@ def test_about_without_a_checkout_or_image_commit(fake_run: FakeRun) -> None:
     assert config.BUILD_COMMIT is None
     script_git(fake_run, system.RunResult(128, "fatal: not a git repository"))
     asyncio.run(about.record_startup_version())
-    assert "Version unknown <i>(git: fatal: not a git repository)</i>." in about_text()
+    assert RELEASE + "Commit unknown <i>(git: fatal: not a git repository)</i>." in about_text()
 
 
 def test_about_escapes_and_clips_the_subject(fake_run: FakeRun) -> None:

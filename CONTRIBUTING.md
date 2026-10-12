@@ -70,6 +70,8 @@ and the bot token stays out of every log line.
 - Pull requests are squash-merged, so the history stays one commit per change.
 - If you add or change a setting, update `.env.example` and the README's
   configuration table too (tests check both against the code).
+- For anything a user would notice, add a line under **Unreleased** in
+  [CHANGELOG.md](CHANGELOG.md).
 
 ## Security problems
 
