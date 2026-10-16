@@ -258,6 +258,7 @@ def timers_message() -> tuple[str, InlineKeyboardMarkup | None]:
         lines.append("Repeating:")
         lines += [repeat_line(s, due, now) for s, due in repeating]
         rows += [repeat_buttons(s, now) for s, _ in repeating]
+    rows.append([*SCHEDULE_BUTTONS.inline_keyboard[0]])  # to set another one
     return card("⏰", "Timers", *lines), InlineKeyboardMarkup(rows)
 
 

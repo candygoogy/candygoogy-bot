@@ -9,6 +9,7 @@ MENU = [
     [("sleep", "😴 Sleep"), ("reboot", "🔄 Reboot"), ("shutdown", "🔌 Shut down")],
     [("timers", "⏰ Timers"), ("logs", "📜 Logs"), ("about", "ℹ️ About")],
     [("net", "🌐 Internet"), ("summary", "🗓 Summary"), ("week", "📅 Week")],
+    [("schedule_shutdown", "⏲ Shut down later"), ("schedule_wake", "⏲ Wake later")],
 ]
 LABELS = [label for row in MENU for _, label in row]
 KEYBOARD_COMMANDS = {label: name for row in MENU for name, label in row}

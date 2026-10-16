@@ -16,7 +16,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from candygoogy import machines, repeating
+from candygoogy import machines, repeating, schedules
 from candygoogy.about import about
 from candygoogy.auth import authorized, is_authorized
 from candygoogy.config import CONFIRM_TTL_SECONDS, Handler, audit
@@ -85,7 +85,7 @@ HELP = [
     ("schedule_wake", "⏰", "Power on later, or on chosen days (asks when)"),
     ("timers", "📋", "Timers and repeating schedules: cancel, skip, delete"),
     ("logs", "📜", "Recent logs: all, audit, errors"),
-    ("about", "ℹ️", "Version, uptime, where timers are saved"),
+    ("about", "ℹ️", "Version, uptime, where timers and schedules are saved"),
 ]
 
 
@@ -111,7 +111,7 @@ async def start(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
         update,
         card(
             "🍬",
-            "candygoogy · workstation remote",
+            "candygoogy · LAN remote",
             "",
             *lines,
             "",
@@ -176,14 +176,18 @@ REFRESH_BUTTON = refresh_button("status")
 
 async def machine_card(machine: Machine) -> tuple[str, InlineKeyboardMarkup]:
     """One machine's full /status card. With several machines it names the
-    machine, lists only its timers and has a way back to the overview."""
+    machine, lists only its timers and schedules and has a way back to the overview."""
     text = await machine_status(machine)
     pending = pending_timers()
+    repeating_runs = schedules.pending_schedules()
     if machines.several():
         text = f"🖥 <b>{escape(machine.name)}</b>\n{text}"
         pending = [t for t in pending if t.machine == machine.name]
-    if pending:
-        text += "\n\n" + "\n".join(timer_line(t) for t in pending)
+        repeating_runs = [(s, due) for s, due in repeating_runs if s.machine == machine.name]
+    timed = [timer_line(t) for t in pending]
+    timed += [schedules.schedule_line(s, due) for s, due in repeating_runs]
+    if timed:
+        text += "\n\n" + "\n".join(timed)
     if not machines.several():
         return checked(text), REFRESH_BUTTON
     buttons = [
@@ -202,8 +206,10 @@ async def overview_card() -> tuple[str, InlineKeyboardMarkup]:
     for machine, (icon, state) in zip(every, summaries, strict=True):
         busy = " · ⏳ busy" if busy_message(machine) else ""
         lines.append(f"{icon} <b>{escape(machine.name)}</b> · {state}{busy}")
-    if pending := pending_timers():
-        lines += ["", *(timer_line(t) for t in pending)]
+    timed = [timer_line(t) for t in pending_timers()]
+    timed += [schedules.schedule_line(s, due) for s, due in schedules.pending_schedules()]
+    if timed:
+        lines += ["", *timed]
     buttons = [
         InlineKeyboardButton(f"📊 {m.name}", callback_data=f"status:{m.name}") for m in every
     ]
@@ -508,18 +514,15 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     expired = time.time() - int(issued) > CONFIRM_TTL_SECONDS if is_number(issued) else True
     if expired or (name != HOMELAB_REBOOT and machine is None):
         audit(name, "expired")
+        if name == HOMELAB_REBOOT:
+            again = "Tap Reboot homelab under /homelab again."
+        elif machines.several() and machine is not None:  # the one it was for
+            again = f"Send /{name} {escape(machine.name)} again."
+        else:
+            again = f"Send /{name} again."
         await edit(
             query,
-            card(
-                "⌛",
-                "Expired",
-                f"This confirmation is over {CONFIRM_TTL_SECONDS}s old. "
-                + (
-                    "Tap Reboot homelab under /homelab again."
-                    if name == HOMELAB_REBOOT
-                    else f"Send /{name} again."
-                ),
-            ),
+            card("⌛", "Expired", f"This confirmation is over {CONFIRM_TTL_SECONDS}s old. {again}"),
         )
         return
 

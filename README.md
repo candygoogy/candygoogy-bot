@@ -281,7 +281,8 @@ exit code 2 and a list of the variable names, never their values.
 
 A keyboard under the message box has buttons for the common commands (Wake,
 Status, Homelab, Sleep, Reboot, Shut down, Timers, Logs, About, Internet,
-Summary, Week). A tap runs the same command, so power actions still ask first.
+Summary, Week, Shut down later, Wake later). A tap runs the same command, so
+power actions still ask first, and the later ones ask when.
 
 **Several machines:** the power and timer commands take a name, e.g.
 `/wake desk` or `/schedule_shutdown nas 22:30`. Without one, the bot asks with

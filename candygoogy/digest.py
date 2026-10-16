@@ -6,7 +6,7 @@ import time
 from collections.abc import Awaitable, Callable
 from html import escape
 
-from candygoogy import homelab, internet, machines, probes
+from candygoogy import homelab, internet, machines, probes, schedules
 from candygoogy.config import DIGEST_AT, App
 from candygoogy.messages import card, notify_allowed
 from candygoogy.timers import next_at, pending_timers, timer_line
@@ -19,7 +19,7 @@ TICK_SECONDS = 60.0
 # trying this often, for up to an hour; after that the summary is stale anyway.
 RETRY_SECONDS = 60.0
 GIVE_UP_SECONDS = 3600.0
-# Timers due within this long are listed.
+# Timers and repeating runs due within this long are listed.
 TIMERS_AHEAD_SECONDS = 24 * 3600
 
 
@@ -38,6 +38,11 @@ async def digest_message() -> str:
     else:
         lines.append("🟢 The PC is on." if awake[0] else "⚫ The PC is off or asleep.")
     lines += [timer_line(t) for t in pending_timers() if t.due - now <= TIMERS_AHEAD_SECONDS]
+    lines += [
+        schedules.schedule_line(s, due)
+        for s, due in schedules.pending_schedules()
+        if due - now <= TIMERS_AHEAD_SECONDS
+    ]
     lines.append("<i>Details: /homelab · /net · /status</i>")
     return card("🗓", "Daily summary", *lines)
 

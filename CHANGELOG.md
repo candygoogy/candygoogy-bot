@@ -6,6 +6,26 @@ All notable changes to candygoogy-bot are listed here. The format follows
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-16
+
+### Changed
+
+- The keyboard has two more buttons, ⏲ Shut down later and ⏲ Wake later,
+  which ask when, like `/schedule_shutdown` and `/schedule_wake`.
+- `/timers` keeps its Schedule shutdown and Schedule wake buttons when timers
+  are set, not only when there are none.
+- With several machines, an expired confirmation names the machine to send
+  again, e.g. "Send /shutdown desk again."
+- `/start` is titled "LAN remote" instead of "workstation remote", and
+  `/about` says repeating schedules are saved in the state folder too.
+
+### Fixed
+
+- The daily summary and `/summary` list repeating runs due in the next
+  24 hours, not only one-shot timers.
+- `/status` lists repeating schedules as well as timers, each machine's own on
+  its card.
+
 ## [1.2.0] - 2026-10-13
 
 ### Added
@@ -53,7 +73,8 @@ The first public release.
 - Only allowlisted users, in a private chat, can use the bot.
 - Runs as a locked-down Docker container or a hardened systemd service.
 
-[Unreleased]: https://github.com/candygoogy/candygoogy-bot/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/candygoogy/candygoogy-bot/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/candygoogy/candygoogy-bot/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/candygoogy/candygoogy-bot/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/candygoogy/candygoogy-bot/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/candygoogy/candygoogy-bot/releases/tag/v1.0.0

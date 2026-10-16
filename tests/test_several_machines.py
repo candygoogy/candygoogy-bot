@@ -27,6 +27,7 @@ from candygoogy import (
     pctime,
     power,
     probes,
+    schedules,
     system,
     timers,
     weekly,
@@ -305,6 +306,14 @@ def test_crafted_names_in_callback_data(
     assert nothing_runs.calls == []
 
 
+def test_an_expired_confirmation_names_its_machine(nothing_runs: FakeRun) -> None:
+    issued = int(time.time()) - config.CONFIRM_TTL_SECONDS - 10
+    press = make_button_press(f"confirm:shutdown:{issued}:nas")
+    call(handlers.on_button, press)
+    assert "Send /shutdown nas again." in edits(press)[0]
+    assert nothing_runs.calls == []
+
+
 # --- Per-machine timers --------------------------------------------------------------------
 
 
@@ -558,6 +567,20 @@ def test_a_machines_card_from_the_overview(monkeypatch: pytest.MonkeyPatch) -> N
     back = make_button_press("status", message_id=2)
     call(handlers.on_button, back)
     assert "📊 <b>Machines</b>" in edits(back)[0]
+
+
+@pytest.mark.usefixtures("workstation_on")
+def test_status_lists_repeating_schedules() -> None:
+    for s in (
+        schedules.Schedule("aaaaaa", "nas", "wake", schedules.EVERY_DAY, (7, 0), AUTHORIZED_ID),
+        schedules.Schedule("bbbbbb", "desk", "shutdown", schedules.EVERY_DAY, (23, 0), 1),
+    ):
+        schedules._schedules[s.id] = s  # pyright: ignore[reportPrivateUsage]
+    overview, _ = asyncio.run(handlers.overview_card())
+    assert "🔁 Wake of nas · daily 07:00" in overview
+    assert "🔁 Shutdown of desk · daily 23:00" in overview
+    nas, _ = asyncio.run(handlers.machine_card(NAS))
+    assert "🔁 Wake of nas · daily 07:00" in nas and "of desk" not in nas  # only its own
 
 
 @pytest.mark.usefixtures("fake_run", "lab")

@@ -11,13 +11,16 @@ import pytest
 from telegram.error import TelegramError
 
 from candygoogy import (
+    config,
     digest,
     handlers,
     internet,
+    schedules,
     settings,
     timers,
 )
 from tests.helpers import (
+    AUTHORIZED_ID,
     FakeHomelab,
     FakeRun,
     call,
@@ -87,6 +90,20 @@ def test_summary_lists_problems_outages_updates_and_timers(
     assert "Shutdown" not in text
     assert workstation_on.calls  # read-only probes only
     assert all(c[0] in ("ping", "systemctl", "docker", "apt") for c in workstation_on.calls)
+
+
+@pytest.mark.usefixtures("lab", "fake_run")
+def test_summary_lists_todays_repeating_runs() -> None:
+    first = config.FIRST_MACHINE.name
+    in_three_days = (schedules.local_date(time.time()).weekday() + 3) % 7
+    for s in (
+        schedules.Schedule("aaaaaa", first, "wake", schedules.EVERY_DAY, (7, 0), AUTHORIZED_ID),
+        schedules.Schedule("bbbbbb", first, "shutdown", (in_three_days,), (23, 0), AUTHORIZED_ID),
+    ):
+        schedules._schedules[s.id] = s  # pyright: ignore[reportPrivateUsage]
+    text = summary_text()
+    assert "🔁 Wake · daily 07:00 · next" in text
+    assert "Shutdown" not in text  # not today's business
 
 
 @pytest.mark.usefixtures("lab")

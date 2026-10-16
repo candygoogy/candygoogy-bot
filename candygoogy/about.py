@@ -120,20 +120,18 @@ def drift_line(running: VersionResult, on_disk: VersionResult) -> str | None:
 
 
 def timers_line() -> str:
-    """Where timers and the last action are saved, and whether that survives a restart."""
+    """Where timers, schedules and the last action are saved, and whether that survives a restart."""
     folder = STATE_DIR
     if not os.access(folder, os.W_OK):
         return (
-            f"⚠️ Can't write to <code>{escape(str(folder))}</code>: timers and the last "
+            f"⚠️ Can't write to <code>{escape(str(folder))}</code>: timers, schedules and the last "
             + "power action won't survive a restart. Install the current unit file "
             + "(it adds StateDirectory=)."
         )
     if os.environ.get("STATE_DIRECTORY"):
-        return (
-            f"⏰ Timers and the last power action are saved in <code>{escape(str(folder))}</code>."
-        )
+        return f"⏰ Timers, schedules and the last power action are saved in <code>{escape(str(folder))}</code>."
     return (
-        "⏰ Timers and the last power action are saved next to the code "
+        "⏰ Timers, schedules and the last power action are saved next to the code "
         + f"(<code>{escape(str(folder))}</code>)."
     )
 

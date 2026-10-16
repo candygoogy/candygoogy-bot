@@ -409,15 +409,6 @@ def when_error(action: str, machine: Machine, error: ValueError, example: str = 
     )
 
 
-async def ask_to_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str) -> None:
-    """/schedule_<action> [machine] [when]: the machine first (asks with buttons if
-    there are several and none is named), then the time."""
-    if (chosen := await machines.choose(update, context.args or [], f"schedule_{action}")) is None:
-        return
-    machine, args = chosen
-    await schedule_for(update, action, machine, args)
-
-
 async def schedule_for(update: Update, action: str, machine: Machine, args: list[str]) -> None:
     """Ask "when?" (no time given) or for confirmation of the given time."""
     text = " ".join(args)
@@ -481,22 +472,12 @@ async def on_when_button(query: CallbackQuery, rest: str) -> None:
     await edit(query, *schedule_prompt(action, machine, due, now))
 
 
-@authorized
-async def schedule_shutdown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await ask_to_schedule(update, context, "shutdown")
-
-
-@authorized
-async def schedule_wake(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await ask_to_schedule(update, context, "wake")
-
-
 def pending_timers() -> list[Timer]:
     """Armed timers, soonest first."""
     return sorted(_timers.values(), key=lambda t: t.due)
 
 
-# Shown when no timer is set. "menu:" buttons run the command (see handlers.py).
+# The last row of /timers (repeating.py). "menu:" buttons run the command (see handlers.py).
 SCHEDULE_BUTTONS = InlineKeyboardMarkup(
     [
         [
@@ -508,20 +489,6 @@ SCHEDULE_BUTTONS = InlineKeyboardMarkup(
 
 
 NO_TIMERS = "Tap to set one, or send /schedule_shutdown or /schedule_wake."
-
-
-def timers_message() -> tuple[str, InlineKeyboardMarkup | None]:
-    """The one-shot timers; /timers itself also lists repeating schedules (repeating.py)."""
-    pending = pending_timers()
-    if not pending:
-        return card("⏰", "No timers", NO_TIMERS), SCHEDULE_BUTTONS
-    lines = [timer_line(t) for t in pending]
-    return card("⏰", "Timers", *lines), InlineKeyboardMarkup([timer_buttons(t) for t in pending])
-
-
-@authorized
-async def timers(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
-    await reply(update, *timers_message())
 
 
 async def confirm_schedule(
@@ -575,7 +542,7 @@ async def on_timer_button(
     query: CallbackQuery,
     context: ContextTypes.DEFAULT_TYPE,
     rest: str,
-    listing: Listing = timers_message,
+    listing: Listing,
 ) -> None:
     """Cancel or +30m, from /timers or the shutdown warning:
     "<op>:<action>:<due>[:<machine>]". `listing`: the /timers card to show

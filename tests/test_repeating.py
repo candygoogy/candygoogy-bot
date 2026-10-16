@@ -284,7 +284,12 @@ def test_timers_lists_one_shots_then_repeating() -> None:
     lines = text.splitlines()
     assert lines.index("Repeating:") > next(i for i, x in enumerate(lines) if "Wake at 20:00" in x)
     assert "🔁🔌 Shutdown · weekdays 23:00 · next 23:00" in text
-    assert buttons[-2:] == [f"rep:skip:{s.id}:20260706", f"rep:delete:{s.id}"]
+    assert buttons[-4:] == [
+        f"rep:skip:{s.id}:20260706",
+        f"rep:delete:{s.id}",
+        "menu:schedule_shutdown",  # still a way to set another one
+        "menu:schedule_wake",
+    ]
 
 
 def test_skip_next_and_dont_skip() -> None:

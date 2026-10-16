@@ -18,6 +18,7 @@ from candygoogy import (
     config,
     handlers,
     power,
+    repeating,
     timers,
 )
 from tests.helpers import (
@@ -102,7 +103,7 @@ def test_when_text() -> None:
 @pytest.mark.parametrize("args", [("soon",), ("8d",)])
 def test_schedule_without_valid_time_explains(fake_run: FakeRun, args: tuple[str, ...]) -> None:
     update = make_update()
-    call_with_args(timers.schedule_shutdown, update, *args)
+    call_with_args(repeating.schedule_shutdown, update, *args)
     [text] = replies(update)
     assert "/schedule_shutdown 45m" in text
     assert update.effective_message.reply_text.call_args.kwargs["reply_markup"] is None
@@ -125,7 +126,7 @@ def test_schedule_asks_first_and_sets_nothing(fake_run: FakeRun, name: str) -> N
 def test_schedule_prompt_mentions_replaced_timer() -> None:
     _ = set_timer("wake", time.time() + 3600)
     update = make_update()
-    call_with_args(timers.schedule_wake, update, "2h")
+    call_with_args(repeating.schedule_wake, update, "2h")
     assert "Replaces the one set for" in replies(update)[0]
 
 
@@ -208,7 +209,7 @@ def test_timers_lists_pending_with_buttons() -> None:
     _ = set_timer("wake", time.time() + 7200)
     shutdown = set_timer("shutdown", time.time() + 3600)
     update = make_update()
-    call(timers.timers, update)
+    call(repeating.timers_command, update)
     text = replies(update)[0]
     assert text.index("Shutdown at") < text.index("Wake at")  # soonest first
     ref = f"shutdown:{int(shutdown.due)}"
@@ -217,7 +218,7 @@ def test_timers_lists_pending_with_buttons() -> None:
 
 def test_timers_when_none() -> None:
     update = make_update()
-    call(timers.timers, update)
+    call(repeating.timers_command, update)
     assert "No timers" in replies(update)[0]
 
 
@@ -485,7 +486,7 @@ def test_schedule_without_time_asks_when(fake_run: FakeRun, name: str, presets: 
 
 
 def test_preset_turns_into_confirmation_on_same_message() -> None:
-    call_with_args(timers.schedule_shutdown, make_update())
+    call_with_args(repeating.schedule_shutdown, make_update())
     update = make_button_press("when:shutdown:30m", message_id=9)
     call(handlers.on_button, update)
     [text] = edits(update)
@@ -511,7 +512,7 @@ def test_bad_preset_sets_nothing(data: str) -> None:
 
 
 def test_typed_answer_gets_confirmation() -> None:
-    call_with_args(timers.schedule_wake, make_update())
+    call_with_args(repeating.schedule_wake, make_update())
     update = typed("06:50")
     call(timers.on_text, update)
     assert "Schedule a wake?" in replies(update)[0]
@@ -523,7 +524,7 @@ def test_typed_answer_gets_confirmation() -> None:
 
 
 def test_bad_typed_answer_explains_and_keeps_listening() -> None:
-    call_with_args(timers.schedule_shutdown, make_update())
+    call_with_args(repeating.schedule_shutdown, make_update())
     bad = typed("later please")
     call(timers.on_text, bad)
     assert "Couldn't read" in replies(bad)[0]
@@ -541,7 +542,7 @@ def test_text_is_ignored_when_not_asked() -> None:
 def test_typed_answer_expires(monkeypatch: pytest.MonkeyPatch) -> None:
     clock = [1000.0]
     monkeypatch.setattr(time, "monotonic", lambda: clock[0])
-    call_with_args(timers.schedule_shutdown, make_update())
+    call_with_args(repeating.schedule_shutdown, make_update())
     clock[0] += timers.ASK_WHEN_TTL_SECONDS + 1
     update = typed("30m")
     call(timers.on_text, update)
@@ -549,7 +550,7 @@ def test_typed_answer_expires(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_cancel_stops_listening() -> None:
-    call_with_args(timers.schedule_shutdown, make_update())
+    call_with_args(repeating.schedule_shutdown, make_update())
     call(handlers.on_button, make_button_press("cancel:sched"))
     update = typed("30m")
     call(timers.on_text, update)
@@ -558,7 +559,7 @@ def test_cancel_stops_listening() -> None:
 
 @pytest.mark.parametrize("user_id", [STRANGER_ID, None])
 def test_strangers_cannot_answer_when(user_id: int | None) -> None:
-    call_with_args(timers.schedule_shutdown, make_update())
+    call_with_args(repeating.schedule_shutdown, make_update())
     update = make_update(user_id)
     update.effective_message.text = "1m"
     call(timers.on_text, update)
@@ -571,7 +572,7 @@ def test_build_app_registers_text_handler() -> None:
 
 
 def test_typed_answer_reaches_when_through_the_text_handler() -> None:
-    call_with_args(timers.schedule_wake, make_update())
+    call_with_args(repeating.schedule_wake, make_update())
     update = typed("06:50")
     call(handlers.on_text, update)
     assert "Schedule a wake?" in replies(update)[0]
@@ -579,7 +580,7 @@ def test_typed_answer_reaches_when_through_the_text_handler() -> None:
 
 @pytest.mark.usefixtures("fake_run")
 def test_keyboard_tap_stops_listening_for_when() -> None:
-    call_with_args(timers.schedule_shutdown, make_update())
+    call_with_args(repeating.schedule_shutdown, make_update())
     call(handlers.on_text, typed("ℹ️ About"))  # moved on to something else
     update = typed("30m")
     call(handlers.on_text, update)
@@ -591,8 +592,8 @@ def test_keyboard_tap_stops_listening_for_when() -> None:
 
 @pytest.mark.usefixtures("two_allowed_users")
 def test_each_user_answers_only_their_own_when() -> None:
-    call_with_args(timers.schedule_wake, make_update(AUTHORIZED_ID))
-    call_with_args(timers.schedule_shutdown, make_update(SECOND_ID))
+    call_with_args(repeating.schedule_wake, make_update(AUTHORIZED_ID))
+    call_with_args(repeating.schedule_shutdown, make_update(SECOND_ID))
     b = typed("30m", SECOND_ID)
     call(handlers.on_text, b)
     [text] = replies(b)
@@ -607,7 +608,7 @@ def test_each_user_answers_only_their_own_when() -> None:
 
 @pytest.mark.usefixtures("two_allowed_users")
 def test_text_from_a_user_who_was_not_asked_is_ignored() -> None:
-    call_with_args(timers.schedule_shutdown, make_update(AUTHORIZED_ID))
+    call_with_args(repeating.schedule_shutdown, make_update(AUTHORIZED_ID))
     b = typed("30m", SECOND_ID)
     call(handlers.on_text, b)
     assert replies(b) == []
@@ -628,7 +629,7 @@ def moved_on(user_id: int, how: str) -> None:
 @pytest.mark.usefixtures("two_allowed_users", "fake_run")
 @pytest.mark.parametrize("how", ["keyboard", "cancel", "preset"])
 def test_another_users_taps_leave_the_prompt_open(how: str) -> None:
-    call_with_args(timers.schedule_shutdown, make_update(AUTHORIZED_ID))
+    call_with_args(repeating.schedule_shutdown, make_update(AUTHORIZED_ID))
     moved_on(SECOND_ID, how)
     a = typed("30m")
     call(handlers.on_text, a)
@@ -638,7 +639,7 @@ def test_another_users_taps_leave_the_prompt_open(how: str) -> None:
 @pytest.mark.usefixtures("two_allowed_users", "fake_run")
 @pytest.mark.parametrize("how", ["keyboard", "cancel", "preset"])
 def test_own_taps_close_the_prompt(how: str) -> None:
-    call_with_args(timers.schedule_shutdown, make_update(AUTHORIZED_ID))
+    call_with_args(repeating.schedule_shutdown, make_update(AUTHORIZED_ID))
     moved_on(AUTHORIZED_ID, how)
     a = typed("30m")
     call(handlers.on_text, a)
@@ -649,9 +650,9 @@ def test_own_taps_close_the_prompt(how: str) -> None:
 def test_each_user_has_their_own_time_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     clock = [1000.0]
     monkeypatch.setattr(time, "monotonic", lambda: clock[0])
-    call_with_args(timers.schedule_shutdown, make_update(AUTHORIZED_ID))
+    call_with_args(repeating.schedule_shutdown, make_update(AUTHORIZED_ID))
     clock[0] += 100
-    call_with_args(timers.schedule_wake, make_update(SECOND_ID))
+    call_with_args(repeating.schedule_wake, make_update(SECOND_ID))
     clock[0] += 30  # A was asked 130 s ago, B 30 s ago
     a = typed("30m")
     call(handlers.on_text, a)
@@ -667,7 +668,7 @@ def test_each_user_has_their_own_time_limit(monkeypatch: pytest.MonkeyPatch) -> 
 
 def test_empty_timers_offers_schedule_buttons(fake_run: FakeRun) -> None:
     update = make_update()
-    call(timers.timers, update)
+    call(repeating.timers_command, update)
     assert "No timers" in replies(update)[0]
     data = button_data(update)
     assert data == ["menu:schedule_shutdown", "menu:schedule_wake"]

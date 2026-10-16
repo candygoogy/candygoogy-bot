@@ -144,7 +144,7 @@ def test_about_escapes_and_clips_the_subject(fake_run: FakeRun) -> None:
 @pytest.mark.parametrize(
     ("state_dir", "writable", "expected"),
     [
-        ("/var/lib/candygoogy-bot", True, "Timers and the last power action are saved in"),
+        ("/var/lib/candygoogy-bot", True, "Timers, schedules and the last power action are saved in"),
         ("", True, "saved next to the code"),
         ("", False, "won't survive a restart"),
     ],
