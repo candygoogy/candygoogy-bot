@@ -14,7 +14,7 @@
 #   docker buildx imagetools inspect python:3.14-slim-trixie
 #   (copy the top-level "Digest: sha256:..." line)
 # then replace it below, rebuild, and let CI run.
-FROM python:3.14-slim-trixie@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170
+FROM python:3.15-slim-trixie@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913
 
 # The commit this image is built from (40 or at least 7 of 0-9 a-f), shown by
 # /about since the image has no git checkout. Empty: /about says it's unknown.
