@@ -6,6 +6,14 @@ All notable changes to candygoogy-bot are listed here. The format follows
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-06
+
+### Security
+
+- certifi 2026.10.23 in the image and the systemd install (PYSEC-2026-4320).
+  The development tools also get filelock 4.2.9 and uv 0.13.7, which fix
+  known vulnerabilities in the versions they replace.
+
 ### Changed
 
 - The README covers more of the setup: the bot opens no ports (host networking
@@ -82,7 +90,8 @@ The first public release.
 - Only allowlisted users, in a private chat, can use the bot.
 - Runs as a locked-down Docker container or a hardened systemd service.
 
-[Unreleased]: https://github.com/candygoogy/candygoogy-bot/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/candygoogy/candygoogy-bot/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/candygoogy/candygoogy-bot/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/candygoogy/candygoogy-bot/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/candygoogy/candygoogy-bot/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/candygoogy/candygoogy-bot/compare/v1.0.0...v1.1.0
