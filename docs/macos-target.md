@@ -20,7 +20,21 @@ Placeholders: `<bot host IP>` (the machine the bot runs on), `<machine IP>`,
   and set "Allow access for" to **only** that user. Leave "Allow full disk
   access for remote users" **off**; the bot needs none.
 
-On the bot's host, make a key without a passphrase (the bot can't type one):
+On the bot's host, get the bot's public key. With Docker, print the key from
+step 3 of the [quickstart](../README.md#quickstart-with-docker)
+(`sudo cat ssh/id_ed25519.pub`, so `<key>` is `id_ed25519`), or make a separate
+one for this Mac in `ssh/` next to `docker-compose.yml`:
+
+```sh
+sudo ssh-keygen -t ed25519 -N "" -C candygoogy-bot -f ssh/<key>
+sudo chown root:10001 ssh/<key> && sudo chmod 640 ssh/<key>
+sudo cat ssh/<key>.pub
+```
+
+With systemd, the [install steps](../README.md#install-without-docker) made
+`id_ed25519`; print it with `sudo cat /etc/candygoogy/ssh/id_ed25519.pub`. For a
+separate key for this Mac, make one without a passphrase (the bot can't type
+one):
 
 ```sh
 sudo ssh-keygen -t ed25519 -N "" -C candygoogy-bot -f /etc/candygoogy/ssh/<key>
@@ -40,7 +54,8 @@ agent and X11 forwarding, the terminal and `~/.ssh/rc`. Permissions:
 `chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys`, both owned by botuser.
 
 Set the machine's `ssh_key_path` to `/etc/candygoogy/ssh/<key>` in the machines
-file (or leave it out to use `SSH_KEY_PATH`).
+file (or leave it out to use `SSH_KEY_PATH`). With Docker too: that's the key's
+path inside the container.
 
 ## 2. The power rule
 

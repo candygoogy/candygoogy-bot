@@ -21,7 +21,21 @@ Use a dedicated user with no sudo rights; the polkit rule below is all it needs.
 sudo useradd --create-home --shell /bin/sh botuser
 ```
 
-On the bot's host, make a key without a passphrase (the bot can't type one):
+On the bot's host, get the bot's public key. With Docker, print the key from
+step 3 of the [quickstart](../README.md#quickstart-with-docker)
+(`sudo cat ssh/id_ed25519.pub`, so `<key>` is `id_ed25519`), or make a separate
+one for this machine in `ssh/` next to `docker-compose.yml`:
+
+```sh
+sudo ssh-keygen -t ed25519 -N "" -C candygoogy-bot -f ssh/<key>
+sudo chown root:10001 ssh/<key> && sudo chmod 640 ssh/<key>
+sudo cat ssh/<key>.pub
+```
+
+With systemd, the [install steps](../README.md#install-without-docker) made
+`id_ed25519`; print it with `sudo cat /etc/candygoogy/ssh/id_ed25519.pub`. For a
+separate key for this machine, make one without a passphrase (the bot can't
+type one):
 
 ```sh
 sudo ssh-keygen -t ed25519 -N "" -C candygoogy-bot -f /etc/candygoogy/ssh/<key>
@@ -49,6 +63,7 @@ On SELinux systems (Fedora, RHEL), also `sudo restorecon -Rv ~botuser/.ssh`.
 
 Set the machine's `ssh_key_path` to `/etc/candygoogy/ssh/<key>` in the machines
 file (or leave it out to use `SSH_KEY_PATH`), and `ssh_port` if sshd isn't on 22.
+With Docker too: that's the key's path inside the container.
 
 ## 2. The power rule
 

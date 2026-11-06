@@ -6,6 +6,15 @@ All notable changes to candygoogy-bot are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The README covers more of the setup: the bot opens no ports (host networking
+  is only for Wake-on-LAN and ARP), setting `TZ`, `MACHINES_FILE` with Docker,
+  printing the public key, and the key step without Docker.
+- The Security model recommends Telegram's two-step verification and explains
+  why the Windows SSH user must be an administrator.
+- The Windows, Linux and macOS guides cover the key step for Docker and systemd.
+
 ## [1.2.1] - 2026-10-16
 
 ### Changed

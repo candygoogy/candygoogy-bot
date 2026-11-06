@@ -34,7 +34,17 @@ Leave sshd's default shell as `cmd.exe`. The bot's commands are written for
 it; a `DefaultShell` of PowerShell under `HKLM:\SOFTWARE\OpenSSH` breaks sleep
 and `/status` details.
 
-On the bot's host, make a key without a passphrase (the bot can't type one):
+On the bot's host, print the bot's public key. With Docker, that's the key you
+made in step 3 of the [quickstart](../README.md#quickstart-with-docker), next to
+`docker-compose.yml`:
+
+```sh
+sudo cat ssh/id_ed25519.pub
+```
+
+With systemd, the [install steps](../README.md#install-without-docker) already
+made the key, so only the last line below is needed. If you skipped that, run
+all three; the key has no passphrase because the bot can't type one:
 
 ```sh
 sudo ssh-keygen -t ed25519 -N "" -C candygoogy-bot -f /etc/candygoogy/ssh/id_ed25519
@@ -49,7 +59,7 @@ For an administrator, Windows OpenSSH reads keys from
 If the file already has keys, match the bot's line by fingerprint. On the bot's host:
 
 ```sh
-sudo ssh-keygen -lf /etc/candygoogy/ssh/id_ed25519.pub
+sudo ssh-keygen -lf /etc/candygoogy/ssh/id_ed25519.pub   # Docker: ssh/id_ed25519.pub
 ```
 
 On the PC, this prints one fingerprint per line in the file:

@@ -27,6 +27,12 @@ reboot and shut down those PCs from Telegram, safely: every power action asks
 first, and the bot reports what actually happened ("Booted in 45s", "Shut down
 in 8s"), not just that it sent a command. It also watches the server itself.
 
+If you already run Home Assistant or UpSnap, or a VPN like Tailscale plus a
+Wake-on-LAN app, those can wake your machines too. This bot is for when you
+want it in a chat, with no web UI or port to expose, a confirmation before
+every power action, a check of what actually happened, and the server's health
+in the same place.
+
 ## Contents
 
 - [Features](#features)
@@ -60,6 +66,9 @@ in 8s"), not just that it sent a command. It also watches the server itself.
 
 You need a Linux host with **rootful Docker Engine** on the same network as your
 PCs. Docker Desktop and rootless Docker can't send Wake-on-LAN packets to the LAN.
+The container uses the host's network only so the Wake-on-LAN broadcast reaches
+the LAN and `ip neigh` can read the host's ARP table. It opens no ports: the bot
+polls Telegram over an outbound connection.
 
 1. Create a bot with [@BotFather](https://t.me/BotFather) and copy its token.
    Find your numeric Telegram user ID (bots like @userinfobot show it).
@@ -69,8 +78,14 @@ PCs. Docker Desktop and rootless Docker can't send Wake-on-LAN packets to the LA
    git clone https://github.com/candygoogy/candygoogy-bot.git
    cd candygoogy-bot
    cp .env.example .env
-   nano .env    # BOT_TOKEN, AUTHORIZED_USER_IDS, and one machine (or MACHINES_FILE)
+   nano .env    # BOT_TOKEN, AUTHORIZED_USER_IDS, TZ, and one machine (or MACHINES_FILE)
    ```
+
+   Set `TZ` too (e.g. `TZ=America/New_York`): timers, schedules and the
+   summaries use it, and the container doesn't see the host's time zone.
+   For `MACHINES_FILE`, copy `machines.example.toml` to `machines.toml`, then
+   uncomment the `MACHINES_FILE` line and the `./machines.toml` mount in
+   `docker-compose.yml`.
 
 3. Make the bot's SSH key. The container runs as UID/GID 10001, so the folder
    and the key must be readable by group 10001, and owned by root so the bot
@@ -80,9 +95,14 @@ PCs. Docker Desktop and rootless Docker can't send Wake-on-LAN packets to the LA
    sudo install -d -o root -g 10001 -m 750 ssh
    sudo ssh-keygen -t ed25519 -N "" -C candygoogy-bot -f ssh/id_ed25519
    sudo chown root:10001 ssh/id_ed25519 && sudo chmod 640 ssh/id_ed25519
+   sudo cat ssh/id_ed25519.pub
    ```
 
-   Then set up each PC to accept that key: see [Preparing the machines](#preparing-the-machines).
+   The last command prints the public key. That line is what goes on each PC:
+   see [Preparing the machines](#preparing-the-machines). A key for another
+   machine goes in `ssh/` too, made with the same commands under another name;
+   in `machines.toml` its `ssh_key_path` is the path inside the container,
+   `/etc/candygoogy/ssh/<key>`.
 
 4. Pull the image, check the configuration, and start:
 
@@ -166,7 +186,8 @@ On a Debian-like host with systemd, the bot runs as a hardened service. The
 layout is code in `/opt/candygoogy-bot`, configuration in
 `/etc/candygoogy/bot.env`, SSH keys in `/etc/candygoogy/ssh/` and state in
 `/var/lib/candygoogy-bot`. The one-time setup commands are at the top of
-[`deploy/candygoogy-bot.service`](deploy/candygoogy-bot.service); in short:
+[`deploy/candygoogy-bot.service`](deploy/candygoogy-bot.service). You need
+Python 3.11 or newer with `python3-venv`, and `git`. In short:
 
 ```sh
 sudo useradd --system --user-group --home-dir /var/lib/candygoogy-bot \
@@ -178,6 +199,9 @@ sudo -u candygoogy /opt/candygoogy-bot/venv/bin/pip install --no-cache-dir --req
     -r /opt/candygoogy-bot/requirements.txt
 sudo install -d -o root -g candygoogy -m 750 /etc/candygoogy /etc/candygoogy/ssh
 sudo install -o root -g candygoogy -m 640 /opt/candygoogy-bot/.env.example /etc/candygoogy/bot.env
+sudo ssh-keygen -t ed25519 -N "" -C candygoogy-bot -f /etc/candygoogy/ssh/id_ed25519
+sudo chown root:candygoogy /etc/candygoogy/ssh/id_ed25519 && sudo chmod 640 /etc/candygoogy/ssh/id_ed25519
+sudo cat /etc/candygoogy/ssh/id_ed25519.pub    # the line that goes on each machine
 sudoedit /etc/candygoogy/bot.env
 sudo cp /opt/candygoogy-bot/deploy/candygoogy-bot.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now candygoogy-bot
@@ -448,7 +472,11 @@ you.
 - **Who can use it:** only the users in `AUTHORIZED_USER_IDS`, and only in a
   private chat with the bot. Everyone else, and every group or channel, is
   silently ignored, and logged at most once a minute per user so strangers
-  can't flood the logs.
+  can't flood the logs. Anyone who gets into one of those Telegram accounts
+  can power your machines on and off, so turn on Telegram's two-step
+  verification for each.
+- **No open ports:** the bot polls Telegram over outbound connections and
+  listens on none, with Docker or systemd.
 - **Power needs a confirmation:** sleep, reboot, shutdown and timers ask first.
   A confirmation expires after 60 seconds and works only once, and the data
   behind the buttons is checked again when they're pressed.
@@ -462,7 +490,11 @@ you.
   without any capabilities, on a read-only filesystem. On the machines, the
   polkit rule (Linux) and the sudoers rule (macOS) allow exactly the power
   commands, and the bot's key is restricted to the bot's host with `from=`
-  and no forwarding or terminal.
+  and no forwarding or terminal. Windows has no such per-command rule: the SSH
+  user must be an administrator ([why](docs/windows-target.md#0-before-you-start)),
+  so there the protection is the key's restrictions and the fixed commands.
+  Anyone who controls the bot's host can run any command on that PC as an
+  administrator, so keep the host locked down.
 - **Docker's socket is root on the host**, so the bot never gets it. For the
   container list, use the filtering proxy (Docker) or point `DOCKER_HOST` at
   one (systemd). Adding the bot's user to Docker's group would give it root.
